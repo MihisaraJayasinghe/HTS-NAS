@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs/promises');
 const fsSync = require('fs');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const morgan = require('morgan');
 
 const MIME_TYPES = {
@@ -60,7 +61,28 @@ const NAS_ROOT = process.env.NAS_ROOT
   ? path.resolve(process.env.NAS_ROOT)
   : path.join(__dirname, '..', '..', 'nas_storage');
 const LOCKS_FILE = path.join(__dirname, '..', 'locks.json');
+const ACCOUNTS_FILE = path.join(__dirname, '..', 'accounts.json');
 const FRONTEND_DIST = path.join(__dirname, '..', '..', 'frontend', 'dist');
+
+const sessions = new Map();
+
+function createSession(username) {
+  const token = crypto.randomBytes(48).toString('hex');
+  sessions.set(token, { username, createdAt: Date.now() });
+  return token;
+}
+
+function revokeSession(token) {
+  sessions.delete(token);
+}
+
+function revokeUserSessions(username) {
+  Array.from(sessions.entries()).forEach(([token, session]) => {
+    if (session.username === username) {
+      sessions.delete(token);
+    }
+  });
+}
 
 fsSync.mkdirSync(NAS_ROOT, { recursive: true });
 
@@ -96,6 +118,246 @@ function resolveAbsolute(input = '') {
   return { absolute: resolved, relative };
 }
 
+async function loadAccounts() {
+  try {
+    const data = await fs.readFile(ACCOUNTS_FILE, 'utf8');
+    const parsed = JSON.parse(data);
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.users !== 'object') {
+      throw new Error('Invalid accounts file');
+    }
+    return parsed;
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      const empty = { users: {} };
+      await fs.writeFile(ACCOUNTS_FILE, JSON.stringify(empty, null, 2));
+      return empty;
+    }
+    throw error;
+  }
+}
+
+async function saveAccounts(accounts) {
+  const payload = {
+    users: accounts.users || {},
+  };
+  await fs.writeFile(ACCOUNTS_FILE, JSON.stringify(payload, null, 2));
+}
+
+async function ensureAccountsInitialized() {
+  const accounts = await loadAccounts();
+  if (!accounts.users || typeof accounts.users !== 'object') {
+    accounts.users = {};
+  }
+  if (!accounts.users.Admin) {
+    const now = new Date().toISOString();
+    const passwordHash = await bcrypt.hash('HTS', 10);
+    accounts.users.Admin = {
+      username: 'Admin',
+      role: 'admin',
+      passwordHash,
+      access: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    await saveAccounts(accounts);
+  }
+}
+
+function sanitizeUsername(input) {
+  if (typeof input !== 'string') {
+    return '';
+  }
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return '';
+  }
+  const safe = trimmed.replace(/[^A-Za-z0-9_.-]/g, '');
+  return safe;
+}
+
+function getAccessList(account) {
+  if (!account || !Array.isArray(account.access)) {
+    return [];
+  }
+  return account.access.map((entry) => ({
+    path: normalizeRelative(entry.path || ''),
+    password: String(entry.password || ''),
+  }));
+}
+
+function toPublicUser(account) {
+  return {
+    username: account.username,
+    role: account.role,
+    access: getAccessList(account),
+    createdAt: account.createdAt,
+    updatedAt: account.updatedAt,
+  };
+}
+
+function canAccessPath(account, relativePath) {
+  if (!account) {
+    return false;
+  }
+  if (account.role === 'admin') {
+    return true;
+  }
+  const normalized = normalizeRelative(relativePath);
+  const accessList = getAccessList(account);
+  if (!accessList.length) {
+    return false;
+  }
+  return accessList.some(({ path: allowedPath }) => {
+    if (!allowedPath) {
+      return true;
+    }
+    if (normalized === allowedPath) {
+      return true;
+    }
+    return normalized.startsWith(`${allowedPath}/`);
+  });
+}
+
+function ensureAccountAccess(account, relativePath) {
+  if (!canAccessPath(account, relativePath)) {
+    const error = new Error('Access denied for this path');
+    error.status = 403;
+    throw error;
+  }
+}
+
+function isUserRootPath(account, relativePath) {
+  if (!account || account.role === 'admin') {
+    return false;
+  }
+  const normalized = normalizeRelative(relativePath);
+  return getAccessList(account).some(({ path: allowedPath }) => allowedPath === normalized);
+}
+
+async function normalizeAccessEntries(access) {
+  if (access === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(access)) {
+    const error = new Error('Access list must be an array');
+    error.status = 400;
+    throw error;
+  }
+  const normalized = [];
+  const seen = new Set();
+  // eslint-disable-next-line no-restricted-syntax
+  for (const entry of access) {
+    if (!entry || typeof entry !== 'object') {
+      const error = new Error('Invalid access entry');
+      error.status = 400;
+      throw error;
+    }
+    const relativePath = normalizeRelative(entry.path || '');
+    if (seen.has(relativePath)) {
+      const error = new Error('Duplicate access path');
+      error.status = 400;
+      throw error;
+    }
+    seen.add(relativePath);
+    const password = typeof entry.password === 'string' ? entry.password.trim() : '';
+    if (!password) {
+      const error = new Error('Password is required for each access entry');
+      error.status = 400;
+      throw error;
+    }
+    const { absolute } = resolveAbsolute(relativePath);
+    try {
+      const stats = await fs.stat(absolute);
+      if (!stats.isDirectory()) {
+        const error = new Error(`Access path “${relativePath}” must be a directory`);
+        error.status = 400;
+        throw error;
+      }
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        const error = new Error(`Access path “${relativePath}” does not exist`);
+        error.status = 404;
+        throw error;
+      }
+      throw err;
+    }
+    normalized.push({ path: relativePath, password });
+  }
+  return normalized;
+}
+
+async function applyAccessLocks(accessEntries) {
+  if (!Array.isArray(accessEntries) || !accessEntries.length) {
+    return;
+  }
+  const locks = await loadLocks();
+  let updated = false;
+  // eslint-disable-next-line no-restricted-syntax
+  for (const entry of accessEntries) {
+    if (!entry.path) {
+      // Skip root level locks
+      // eslint-disable-next-line no-continue
+      continue;
+    }
+    const current = locks[entry.path];
+    let needsUpdate = true;
+    if (current) {
+      // eslint-disable-next-line no-await-in-loop
+      const matches = await bcrypt.compare(entry.password, current.hash);
+      needsUpdate = !matches;
+    }
+    if (needsUpdate) {
+      // eslint-disable-next-line no-await-in-loop
+      const hash = await bcrypt.hash(entry.password, 10);
+      locks[entry.path] = { hash, lockedAt: new Date().toISOString() };
+      updated = true;
+    }
+  }
+  if (updated) {
+    await saveLocks(locks);
+  }
+}
+
+function asyncHandler(handler) {
+  return (req, res, next) => {
+    Promise.resolve(handler(req, res, next)).catch(next);
+  };
+}
+
+const requireAuth = asyncHandler(async (req, res, next) => {
+  const header = req.get('authorization') || '';
+  const token = header.startsWith('Bearer ')
+    ? header.slice(7).trim()
+    : '';
+  if (!token) {
+    res.status(401).json({ message: 'Authentication required' });
+    return;
+  }
+  const session = sessions.get(token);
+  if (!session) {
+    res.status(401).json({ message: 'Invalid or expired session' });
+    return;
+  }
+  const accounts = await loadAccounts();
+  const account = accounts.users[session.username];
+  if (!account) {
+    revokeSession(token);
+    res.status(401).json({ message: 'Account no longer exists' });
+    return;
+  }
+  req.authToken = token;
+  req.account = account;
+  req.accounts = accounts;
+  next();
+});
+
+function requireAdmin(req, res, next) {
+  if (!req.account || req.account.role !== 'admin') {
+    return res.status(403).json({ message: 'Admin privileges required' });
+  }
+  return next();
+}
+
 async function loadLocks() {
   try {
     const data = await fs.readFile(LOCKS_FILE, 'utf8');
@@ -118,18 +380,25 @@ function getLockEntry(locks, relativePath) {
   return locks[relativePath];
 }
 
-async function assertUnlocked(relativePath, password) {
+async function assertUnlocked(relativePath, password, account) {
   const locks = await loadLocks();
   const entry = getLockEntry(locks, relativePath);
   if (!entry) {
     return { locks, entry: null };
   }
-  if (!password) {
+  let effectivePassword = password;
+  if (!effectivePassword && account) {
+    const accessEntry = getAccessList(account).find((item) => item.path === relativePath);
+    if (accessEntry?.password) {
+      effectivePassword = accessEntry.password;
+    }
+  }
+  if (!effectivePassword) {
     const error = new Error('Password required for locked item');
     error.status = 423;
     throw error;
   }
-  const match = await bcrypt.compare(password, entry.hash);
+  const match = await bcrypt.compare(effectivePassword, entry.hash);
   if (!match) {
     const error = new Error('Invalid password for locked item');
     error.status = 403;
@@ -156,7 +425,13 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     try {
       const targetPath = req.body.path || req.query.path || '';
-      const { absolute } = resolveAbsolute(targetPath);
+      if (!req.account) {
+        const error = new Error('Authentication required');
+        error.status = 401;
+        throw error;
+      }
+      const { absolute, relative } = resolveAbsolute(targetPath);
+      ensureAccountAccess(req.account, relative);
       fsSync.mkdirSync(absolute, { recursive: true });
       cb(null, absolute);
     } catch (error) {
@@ -174,10 +449,272 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.get('/api/items', async (req, res, next) => {
+app.post(
+  '/api/auth/login',
+  asyncHandler(async (req, res) => {
+    const rawUsername = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+    const safeUsername = sanitizeUsername(rawUsername);
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    if (!rawUsername || rawUsername !== safeUsername) {
+      return res.status(400).json({ message: 'Invalid username' });
+    }
+    if (!password) {
+      return res.status(400).json({ message: 'Password is required' });
+    }
+
+    const accounts = await loadAccounts();
+    const account = accounts.users[safeUsername];
+    if (!account) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    const match = await bcrypt.compare(password, account.passwordHash);
+    if (!match) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    const token = createSession(account.username);
+    return res.json({
+      token,
+      user: toPublicUser(account),
+    });
+  })
+);
+
+app.post(
+  '/api/auth/logout',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (req.authToken) {
+      revokeSession(req.authToken);
+    }
+    res.json({ message: 'Logged out' });
+  })
+);
+
+app.get(
+  '/api/auth/me',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const accounts = await loadAccounts();
+    const account = accounts.users[req.account.username];
+    if (!account) {
+      return res.status(404).json({ message: 'Account not found' });
+    }
+    return res.json({ user: toPublicUser(account) });
+  })
+);
+
+app.put(
+  '/api/users/me/password',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const currentPassword = typeof req.body?.currentPassword === 'string' ? req.body.currentPassword : '';
+    const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current and new passwords are required' });
+    }
+    if (newPassword.length < 4) {
+      return res.status(400).json({ message: 'New password must be at least 4 characters long' });
+    }
+
+    const accounts = await loadAccounts();
+    const username = req.account.username;
+    const account = accounts.users[username];
+    if (!account) {
+      revokeSession(req.authToken);
+      return res.status(404).json({ message: 'Account not found' });
+    }
+
+    const match = await bcrypt.compare(currentPassword, account.passwordHash);
+    if (!match) {
+      return res.status(403).json({ message: 'Current password is incorrect' });
+    }
+
+    account.passwordHash = await bcrypt.hash(newPassword, 10);
+    account.updatedAt = new Date().toISOString();
+    await saveAccounts(accounts);
+
+    res.json({ message: 'Password updated' });
+  })
+);
+
+app.get(
+  '/api/users/me/access',
+  requireAuth,
+  (req, res) => {
+    res.json({ access: getAccessList(req.account) });
+  }
+);
+
+app.get(
+  '/api/admin/users',
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const accounts = await loadAccounts();
+    const users = Object.values(accounts.users).map((account) => toPublicUser(account));
+    res.json({ users });
+  })
+);
+
+app.post(
+  '/api/admin/users',
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const rawUsername = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+    const safeUsername = sanitizeUsername(rawUsername);
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    const roleInput = typeof req.body?.role === 'string' ? req.body.role.trim().toLowerCase() : 'user';
+
+    if (!rawUsername || rawUsername !== safeUsername) {
+      return res.status(400).json({ message: 'Username may only include letters, numbers, dots, underscores, and dashes' });
+    }
+    if (!password || password.length < 4) {
+      return res.status(400).json({ message: 'Password must be at least 4 characters long' });
+    }
+    if (!['admin', 'user'].includes(roleInput)) {
+      return res.status(400).json({ message: 'Role must be either "admin" or "user"' });
+    }
+
+    const accounts = await loadAccounts();
+    if (accounts.users[safeUsername]) {
+      return res.status(409).json({ message: 'A user with this username already exists' });
+    }
+
+    const normalizedAccess = await normalizeAccessEntries(Array.isArray(req.body?.access) ? req.body.access : []);
+    const now = new Date().toISOString();
+    const passwordHash = await bcrypt.hash(password, 10);
+    accounts.users[safeUsername] = {
+      username: safeUsername,
+      role: roleInput,
+      passwordHash,
+      access: normalizedAccess,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await saveAccounts(accounts);
+    await applyAccessLocks(normalizedAccess);
+
+    res.status(201).json({ user: toPublicUser(accounts.users[safeUsername]) });
+  })
+);
+
+app.put(
+  '/api/admin/users/:username',
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const rawUsername = typeof req.params.username === 'string' ? req.params.username.trim() : '';
+    const safeUsername = sanitizeUsername(rawUsername);
+    if (!rawUsername || rawUsername !== safeUsername) {
+      return res.status(400).json({ message: 'Invalid username' });
+    }
+
+    const accounts = await loadAccounts();
+    const account = accounts.users[safeUsername];
+    if (!account) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const updates = {};
+    if (typeof req.body?.password === 'string' && req.body.password) {
+      if (req.body.password.length < 4) {
+        return res.status(400).json({ message: 'Password must be at least 4 characters long' });
+      }
+      updates.passwordHash = await bcrypt.hash(req.body.password, 10);
+    }
+
+    if (typeof req.body?.role === 'string') {
+      const role = req.body.role.trim().toLowerCase();
+      if (!['admin', 'user'].includes(role)) {
+        return res.status(400).json({ message: 'Role must be either "admin" or "user"' });
+      }
+      updates.role = role;
+    }
+
+    let normalizedAccess;
+    if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'access')) {
+      normalizedAccess = await normalizeAccessEntries(req.body.access);
+      updates.access = normalizedAccess;
+    }
+
+    if (updates.passwordHash) {
+      account.passwordHash = updates.passwordHash;
+    }
+    if (updates.role) {
+      account.role = updates.role;
+    }
+    if (updates.access) {
+      account.access = updates.access;
+    }
+    if (!updates.passwordHash && !updates.role && !updates.access) {
+      return res.json({ user: toPublicUser(account) });
+    }
+
+    account.updatedAt = new Date().toISOString();
+    await saveAccounts(accounts);
+    if (updates.access) {
+      await applyAccessLocks(updates.access);
+    }
+
+    res.json({ user: toPublicUser(account) });
+  })
+);
+
+app.delete(
+  '/api/admin/users/:username',
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const rawUsername = typeof req.params.username === 'string' ? req.params.username.trim() : '';
+    const safeUsername = sanitizeUsername(rawUsername);
+    if (!rawUsername || rawUsername !== safeUsername) {
+      return res.status(400).json({ message: 'Invalid username' });
+    }
+
+    if (safeUsername === 'Admin') {
+      return res.status(400).json({ message: 'The default Admin account cannot be removed' });
+    }
+    if (safeUsername === req.account.username) {
+      return res.status(400).json({ message: 'You cannot delete your own account' });
+    }
+
+    const accounts = await loadAccounts();
+    const account = accounts.users[safeUsername];
+    if (!account) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const remainingAdmins = Object.values(accounts.users).filter((user) => user.role === 'admin' && user.username !== safeUsername);
+    if (account.role === 'admin' && remainingAdmins.length === 0) {
+      return res.status(400).json({ message: 'At least one admin account must remain' });
+    }
+
+    delete accounts.users[safeUsername];
+    await saveAccounts(accounts);
+    revokeUserSessions(safeUsername);
+
+    res.json({ message: 'User deleted' });
+  })
+);
+
+app.get('/api/items', requireAuth, async (req, res, next) => {
   try {
     const relativePath = req.query.path ? String(req.query.path) : '';
     const { absolute, relative } = resolveAbsolute(relativePath);
+    if (req.account.role !== 'admin' && !relative) {
+      const hasRootAccess = getAccessList(req.account).some((entry) => entry.path === '');
+      if (!hasRootAccess) {
+        return res
+          .status(403)
+          .json({ message: 'Select a folder from your dashboard to browse files' });
+      }
+    }
+    ensureAccountAccess(req.account, relative);
+
     const stats = await fs.stat(absolute);
     if (!stats.isDirectory()) {
       return res.status(400).json({ message: 'Path must be a directory' });
@@ -226,7 +763,7 @@ app.get('/api/items', async (req, res, next) => {
   }
 });
 
-app.post('/api/folders', async (req, res, next) => {
+app.post('/api/folders', requireAuth, async (req, res, next) => {
   try {
     const { path: targetPath = '', name } = req.body;
     if (!name || typeof name !== 'string') {
@@ -244,6 +781,8 @@ app.post('/api/folders', async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid folder path' });
     }
 
+    ensureAccountAccess(req.account, parentRelative);
+
     await fs.mkdir(newAbsolute, { recursive: false });
     res.status(201).json({ message: 'Folder created' });
   } catch (error) {
@@ -257,7 +796,7 @@ app.post('/api/folders', async (req, res, next) => {
   }
 });
 
-app.post('/api/upload', (req, res, next) => {
+app.post('/api/upload', requireAuth, (req, res, next) => {
   upload.array('files')(req, res, async (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
@@ -269,6 +808,7 @@ app.post('/api/upload', (req, res, next) => {
     try {
       const targetPath = req.body.path || '';
       const { relative } = resolveAbsolute(targetPath);
+      ensureAccountAccess(req.account, relative);
       const locks = await loadLocks();
       const lockedConflicts = [];
       if (Array.isArray(req.files)) {
@@ -307,7 +847,7 @@ function deleteLocksForPath(locks, relativePath) {
   });
 }
 
-app.delete('/api/items', async (req, res, next) => {
+app.delete('/api/items', requireAuth, async (req, res, next) => {
   try {
     const { path: targetPath, password } = req.body;
     if (typeof targetPath !== 'string') {
@@ -315,7 +855,11 @@ app.delete('/api/items', async (req, res, next) => {
     }
 
     const { absolute, relative } = resolveAbsolute(targetPath);
-    const { locks } = await assertUnlocked(relative, password);
+    ensureAccountAccess(req.account, relative);
+    if (isUserRootPath(req.account, relative)) {
+      return res.status(403).json({ message: 'You cannot delete a folder that grants your access' });
+    }
+    const { locks } = await assertUnlocked(relative, password, req.account);
 
     const stats = await fs.stat(absolute);
     if (stats.isDirectory()) {
@@ -336,7 +880,7 @@ app.delete('/api/items', async (req, res, next) => {
   }
 });
 
-app.put('/api/items/rename', async (req, res, next) => {
+app.put('/api/items/rename', requireAuth, async (req, res, next) => {
   try {
     const { path: targetPath, newName, password } = req.body;
     if (!targetPath || typeof targetPath !== 'string') {
@@ -371,7 +915,13 @@ app.put('/api/items/rename', async (req, res, next) => {
       }
     }
 
-    const { locks } = await assertUnlocked(relative, password);
+    ensureAccountAccess(req.account, relative);
+    ensureAccountAccess(req.account, parentRelative);
+    ensureAccountAccess(req.account, newRelative);
+    if (isUserRootPath(req.account, relative)) {
+      return res.status(403).json({ message: 'You cannot rename a folder that grants your access' });
+    }
+    const { locks } = await assertUnlocked(relative, password, req.account);
 
     await fs.rename(absolute, newAbsolute);
 
@@ -401,7 +951,7 @@ app.put('/api/items/rename', async (req, res, next) => {
   }
 });
 
-app.post('/api/items/lock', async (req, res, next) => {
+app.post('/api/items/lock', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { path: targetPath, password } = req.body;
     if (!targetPath || typeof targetPath !== 'string') {
@@ -413,6 +963,7 @@ app.post('/api/items/lock', async (req, res, next) => {
 
     const { absolute, relative } = resolveAbsolute(targetPath);
     await fs.access(absolute);
+    ensureAccountAccess(req.account, relative);
     const locks = await loadLocks();
     if (getLockEntry(locks, relative)) {
       return res.status(409).json({ message: 'Item is already locked' });
@@ -431,7 +982,7 @@ app.post('/api/items/lock', async (req, res, next) => {
   }
 });
 
-app.post('/api/items/unlock', async (req, res, next) => {
+app.post('/api/items/unlock', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { path: targetPath, password } = req.body;
     if (!targetPath || typeof targetPath !== 'string') {
@@ -442,6 +993,7 @@ app.post('/api/items/unlock', async (req, res, next) => {
     }
 
     const { relative } = resolveAbsolute(targetPath);
+    ensureAccountAccess(req.account, relative);
     const locks = await loadLocks();
     const entry = getLockEntry(locks, relative);
     if (!entry) {
@@ -462,7 +1014,7 @@ app.post('/api/items/unlock', async (req, res, next) => {
   }
 });
 
-app.get('/api/items/content', async (req, res, next) => {
+app.get('/api/items/content', requireAuth, async (req, res, next) => {
   try {
     const targetPath = req.query.path ? String(req.query.path) : '';
     if (!targetPath) {
@@ -476,7 +1028,8 @@ app.get('/api/items/content', async (req, res, next) => {
     }
 
     const password = req.get('x-item-password') || (req.query.password ? String(req.query.password) : undefined);
-    await assertUnlocked(relative, password);
+    ensureAccountAccess(req.account, relative);
+    await assertUnlocked(relative, password, req.account);
 
     const fileName = path.basename(absolute);
     const downloadFlag = req.query.download === '1' || req.query.download === 'true';
@@ -523,9 +1076,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`NAS server listening on port ${PORT}`);
-  // eslint-disable-next-line no-console
-  console.log(`Serving files from ${NAS_ROOT}`);
-});
+ensureAccountsInitialized()
+  .then(() => {
+    app.listen(PORT, () => {
+      // eslint-disable-next-line no-console
+      console.log(`NAS server listening on port ${PORT}`);
+      // eslint-disable-next-line no-console
+      console.log(`Serving files from ${NAS_ROOT}`);
+    });
+  })
+  .catch((error) => {
+    console.error('Failed to initialize account store', error);
+    process.exit(1);
+  });

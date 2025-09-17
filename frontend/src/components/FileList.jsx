@@ -57,6 +57,10 @@ const FileList = ({
   onDelete,
   onToggleLock,
   onDownload,
+  allowRename = true,
+  allowDelete = true,
+  allowLockToggle = true,
+  allowQuickLook = true,
 }) => {
   if (!items || items.length === 0) {
     return <div className="empty-state">This folder is empty.</div>;
@@ -86,7 +90,7 @@ const FileList = ({
               onSelect(item);
               if (isDirectory) {
                 onOpen(item);
-              } else {
+              } else if (allowQuickLook) {
                 onQuickLook(item);
               }
             }}
@@ -94,11 +98,11 @@ const FileList = ({
               if (event.key === 'Enter') {
                 if (isDirectory) {
                   onOpen(item);
-                } else {
+                } else if (allowQuickLook) {
                   onQuickLook(item);
                 }
               }
-              if (event.key === ' ' && !isDirectory) {
+              if (event.key === ' ' && !isDirectory && allowQuickLook) {
                 event.preventDefault();
                 onQuickLook(item);
               }
@@ -127,17 +131,19 @@ const FileList = ({
                 </button>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    className="pill-button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onSelect(item);
-                      onQuickLook(item);
-                    }}
-                  >
-                    Quick Look
-                  </button>
+                  {allowQuickLook && (
+                    <button
+                      type="button"
+                      className="pill-button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onSelect(item);
+                        onQuickLook(item);
+                      }}
+                    >
+                      Quick Look
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="pill-button"
@@ -151,39 +157,45 @@ const FileList = ({
                   </button>
                 </>
               )}
-              <button
-                type="button"
-                className="pill-button subtle"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onSelect(item);
-                  onRename(item);
-                }}
-              >
-                Rename
-              </button>
-              <button
-                type="button"
-                className="pill-button danger"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onSelect(item);
-                  onDelete(item);
-                }}
-              >
-                Delete
-              </button>
-              <button
-                type="button"
-                className="pill-button subtle"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onSelect(item);
-                  onToggleLock(item);
-                }}
-              >
-                {item.isLocked ? 'Unlock' : 'Lock'}
-              </button>
+              {allowRename && (
+                <button
+                  type="button"
+                  className="pill-button subtle"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(item);
+                    onRename(item);
+                  }}
+                >
+                  Rename
+                </button>
+              )}
+              {allowDelete && (
+                <button
+                  type="button"
+                  className="pill-button danger"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(item);
+                    onDelete(item);
+                  }}
+                >
+                  Delete
+                </button>
+              )}
+              {allowLockToggle && (
+                <button
+                  type="button"
+                  className="pill-button subtle"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(item);
+                    onToggleLock(item);
+                  }}
+                >
+                  {item.isLocked ? 'Unlock' : 'Lock'}
+                </button>
+              )}
             </div>
           </div>
         );
@@ -223,7 +235,7 @@ const FileList = ({
                 onSelect(item);
                 if (isDirectory) {
                   onOpen(item);
-                } else {
+                } else if (allowQuickLook) {
                   onQuickLook(item);
                 }
               }}
@@ -231,11 +243,11 @@ const FileList = ({
                 if (event.key === 'Enter') {
                   if (isDirectory) {
                     onOpen(item);
-                  } else {
+                  } else if (allowQuickLook) {
                     onQuickLook(item);
                   }
                 }
-                if (event.key === ' ' && !isDirectory) {
+                if (event.key === ' ' && !isDirectory && allowQuickLook) {
                   event.preventDefault();
                   onQuickLook(item);
                 }
@@ -266,17 +278,19 @@ const FileList = ({
                   </button>
                 ) : (
                   <>
-                    <button
-                      type="button"
-                      className="link"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onSelect(item);
-                        onQuickLook(item);
-                      }}
-                    >
-                      Quick Look
-                    </button>
+                    {allowQuickLook && (
+                      <button
+                        type="button"
+                        className="link"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onSelect(item);
+                          onQuickLook(item);
+                        }}
+                      >
+                        Quick Look
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="link"
@@ -290,39 +304,45 @@ const FileList = ({
                     </button>
                   </>
                 )}
-                <button
-                  type="button"
-                  className="link"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSelect(item);
-                    onRename(item);
-                  }}
-                >
-                  Rename
-                </button>
-                <button
-                  type="button"
-                  className="link warning"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSelect(item);
-                    onDelete(item);
-                  }}
-                >
-                  Delete
-                </button>
-                <button
-                  type="button"
-                  className="link"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSelect(item);
-                    onToggleLock(item);
-                  }}
-                >
-                  {lockIcon} {item.isLocked ? 'Unlock' : 'Lock'}
-                </button>
+                {allowRename && (
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect(item);
+                      onRename(item);
+                    }}
+                  >
+                    Rename
+                  </button>
+                )}
+                {allowDelete && (
+                  <button
+                    type="button"
+                    className="link warning"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect(item);
+                      onDelete(item);
+                    }}
+                  >
+                    Delete
+                  </button>
+                )}
+                {allowLockToggle && (
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect(item);
+                      onToggleLock(item);
+                    }}
+                  >
+                    {lockIcon} {item.isLocked ? 'Unlock' : 'Lock'}
+                  </button>
+                )}
               </td>
             </tr>
           );

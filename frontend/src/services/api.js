@@ -6,19 +6,36 @@ export const API_ROOT = trimmedBase
     : `${trimmedBase}/api`
   : '/api';
 
+let authToken = '';
+
+export const setAuthToken = (token) => {
+  authToken = token || '';
+};
+
+export const getAuthToken = () => authToken;
+
+export const clearAuthToken = () => {
+  authToken = '';
+};
+
 async function request(path, options = {}) {
   const url = `${API_ROOT}${path}`;
   const opts = { ...options };
+  const isFormData = opts.body instanceof FormData;
+  const headers = { ...(options.headers || {}) };
 
-  if (!(opts.body instanceof FormData)) {
-    opts.headers = {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    };
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
     if (opts.body && typeof opts.body !== 'string') {
       opts.body = JSON.stringify(opts.body);
     }
   }
+
+  opts.headers = headers;
 
   const response = await fetch(url, opts);
   const isJson = response.headers.get('content-type')?.includes('application/json');
@@ -104,6 +121,9 @@ export async function fetchFileContent(path, { password, download } = {}) {
   }
 
   const headers = {};
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
   if (password) {
     headers['x-item-password'] = password;
   }
@@ -151,4 +171,50 @@ export async function fetchFileContent(path, { password, download } = {}) {
   }
 
   return { blob, contentType, filename };
+}
+
+export function login(username, password) {
+  return request('/auth/login', {
+    method: 'POST',
+    body: { username, password },
+  });
+}
+
+export function logout() {
+  return request('/auth/logout', { method: 'POST' });
+}
+
+export function getCurrentUser() {
+  return request('/auth/me');
+}
+
+export function changeMyPassword(currentPassword, newPassword) {
+  return request('/users/me/password', {
+    method: 'PUT',
+    body: { currentPassword, newPassword },
+  });
+}
+
+export function fetchUsers() {
+  return request('/admin/users');
+}
+
+export function createUser(body) {
+  return request('/admin/users', {
+    method: 'POST',
+    body,
+  });
+}
+
+export function updateUser(username, body) {
+  return request(`/admin/users/${encodeURIComponent(username)}`, {
+    method: 'PUT',
+    body,
+  });
+}
+
+export function deleteUser(username) {
+  return request(`/admin/users/${encodeURIComponent(username)}`, {
+    method: 'DELETE',
+  });
 }
