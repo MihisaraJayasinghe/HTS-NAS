@@ -8,7 +8,7 @@ const bcrypt = require('bcryptjs');
 const morgan = require('morgan');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 6000;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
