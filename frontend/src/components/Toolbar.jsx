@@ -7,6 +7,10 @@ const Toolbar = ({
   onRefresh,
   onNavigateUp,
   canNavigateUp,
+  onQuickLook,
+  canQuickLook,
+  viewMode,
+  onViewModeChange,
 }) => {
   const inputRef = useRef(null);
 
@@ -36,6 +40,32 @@ const Toolbar = ({
         <span className="toolbar-path">{currentPath || 'Home'}</span>
       </div>
       <div className="toolbar-actions">
+        <div className="view-toggle" role="group" aria-label="Change view">
+          <button
+            type="button"
+            className={`view-button${viewMode === 'grid' ? ' active' : ''}`}
+            onClick={() => onViewModeChange('grid')}
+            aria-label="Icon view"
+          >
+            🗂️
+          </button>
+          <button
+            type="button"
+            className={`view-button${viewMode === 'list' ? ' active' : ''}`}
+            onClick={() => onViewModeChange('list')}
+            aria-label="List view"
+          >
+            📄
+          </button>
+        </div>
+        <button
+          type="button"
+          className="button secondary"
+          onClick={onQuickLook}
+          disabled={!canQuickLook}
+        >
+          👁️ Quick Look
+        </button>
         <button type="button" className="button" onClick={onCreateFolder}>
           📁 New Folder
         </button>
