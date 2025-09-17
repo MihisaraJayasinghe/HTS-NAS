@@ -7,12 +7,54 @@ const fsSync = require('fs');
 const bcrypt = require('bcryptjs');
 const morgan = require('morgan');
 
+const MIME_TYPES = {
+  '.aac': 'audio/aac',
+  '.avi': 'video/x-msvideo',
+  '.bmp': 'image/bmp',
+  '.csv': 'text/csv',
+  '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.gif': 'image/gif',
+  '.htm': 'text/html',
+  '.html': 'text/html',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.js': 'text/javascript',
+  '.json': 'application/json',
+  '.m4v': 'video/x-m4v',
+  '.mkv': 'video/x-matroska',
+  '.mov': 'video/quicktime',
+  '.mp3': 'audio/mpeg',
+  '.mp4': 'video/mp4',
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.svg': 'image/svg+xml',
+  '.txt': 'text/plain',
+  '.wav': 'audio/wav',
+  '.webm': 'video/webm',
+  '.webp': 'image/webp',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.zip': 'application/zip',
+};
+
+function getMimeType(filename) {
+  const ext = path.extname(filename).toLowerCase();
+  return MIME_TYPES[ext] || 'application/octet-stream';
+}
+
 const app = express();
 const PORT = process.env.PORT || 6000;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(morgan('dev'));
+app.use((req, res, next) => {
+  res.header('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type, X-File-Name');
+  next();
+});
 
 const NAS_ROOT = process.env.NAS_ROOT
   ? path.resolve(process.env.NAS_ROOT)
@@ -153,6 +195,7 @@ app.get('/api/items', async (req, res, next) => {
         const itemRelative = normalizeRelative(path.join(relative, name));
         return {
           name,
+          path: itemRelative,
           type: itemStats.isDirectory() ? 'directory' : 'file',
           size: itemStats.isDirectory() ? null : itemStats.size,
           modified: itemStats.mtime.toISOString(),
@@ -416,6 +459,48 @@ app.post('/api/items/unlock', async (req, res, next) => {
     res.json({ message: 'Item unlocked' });
   } catch (error) {
     next(error);
+  }
+});
+
+app.get('/api/items/content', async (req, res, next) => {
+  try {
+    const targetPath = req.query.path ? String(req.query.path) : '';
+    if (!targetPath) {
+      return res.status(400).json({ message: 'Path is required' });
+    }
+
+    const { absolute, relative } = resolveAbsolute(targetPath);
+    const stats = await fs.stat(absolute);
+    if (stats.isDirectory()) {
+      return res.status(400).json({ message: 'Path must be a file' });
+    }
+
+    const password = req.get('x-item-password') || (req.query.password ? String(req.query.password) : undefined);
+    await assertUnlocked(relative, password);
+
+    const fileName = path.basename(absolute);
+    const downloadFlag = req.query.download === '1' || req.query.download === 'true';
+    const mimeType = getMimeType(fileName);
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader(
+      'Content-Disposition',
+      `${downloadFlag ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(fileName)}`
+    );
+    res.setHeader('X-File-Name', encodeURIComponent(fileName));
+
+    const stream = fsSync.createReadStream(absolute);
+    stream.on('error', next);
+    stream.pipe(res);
+    return undefined;
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({ message: 'File not found' });
+    }
+    if (error.status) {
+      return res.status(error.status).json({ message: error.message || 'Unable to open file' });
+    }
+    return next(error);
   }
 });
 

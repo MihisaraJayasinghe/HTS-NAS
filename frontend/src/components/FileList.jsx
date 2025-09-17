@@ -11,12 +11,187 @@ const formatSize = (size) => {
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[index]}`;
 };
 
-const FileList = ({ items, onOpen, onRename, onDelete, onToggleLock }) => {
+const getFileGlyph = (item) => {
+  if (item.type === 'directory') {
+    return '📁';
+  }
+  const extension = item.name.split('.').pop()?.toLowerCase();
+  if (!extension) {
+    return '📄';
+  }
+  if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'].includes(extension)) {
+    return '🖼️';
+  }
+  if (['mp4', 'mov', 'mkv', 'webm', 'avi'].includes(extension)) {
+    return '🎬';
+  }
+  if (['mp3', 'wav', 'aac', 'flac'].includes(extension)) {
+    return '🎵';
+  }
+  if (['pdf'].includes(extension)) {
+    return '📕';
+  }
+  if (['ppt', 'pptx'].includes(extension)) {
+    return '📊';
+  }
+  if (['xls', 'xlsx', 'csv'].includes(extension)) {
+    return '📈';
+  }
+  if (['doc', 'docx'].includes(extension)) {
+    return '📄';
+  }
+  if (['zip', 'rar', '7z'].includes(extension)) {
+    return '🗜️';
+  }
+  return '📄';
+};
+
+const FileList = ({
+  items,
+  viewMode,
+  selectedItem,
+  onSelect,
+  onOpen,
+  onQuickLook,
+  onRename,
+  onDelete,
+  onToggleLock,
+  onDownload,
+}) => {
   if (!items || items.length === 0) {
     return <div className="empty-state">This folder is empty.</div>;
   }
 
-  return (
+  const selectedPath = selectedItem?.path;
+
+  const renderGridView = () => (
+    <div className="file-grid" role="list">
+      {items.map((item) => {
+        const isDirectory = item.type === 'directory';
+        const isSelected = selectedPath === item.path;
+        const glyph = getFileGlyph(item);
+        const modified = new Date(item.modified).toLocaleString();
+
+        return (
+          <div
+            key={item.path || item.name}
+            role="listitem"
+            tabIndex={0}
+            className={`file-grid-item${isSelected ? ' selected' : ''}`}
+            onClick={(event) => {
+              event.preventDefault();
+              onSelect(item);
+            }}
+            onDoubleClick={() => {
+              onSelect(item);
+              if (isDirectory) {
+                onOpen(item);
+              } else {
+                onQuickLook(item);
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                if (isDirectory) {
+                  onOpen(item);
+                } else {
+                  onQuickLook(item);
+                }
+              }
+              if (event.key === ' ' && !isDirectory) {
+                event.preventDefault();
+                onQuickLook(item);
+              }
+            }}
+          >
+            <div className="file-grid-icon" aria-hidden="true">
+              {glyph}
+            </div>
+            <div className="file-grid-name" title={item.name}>
+              {item.name}
+            </div>
+            <div className="file-grid-meta" title={modified}>
+              {isDirectory ? 'Folder' : formatSize(item.size)} · {modified}
+            </div>
+            <div className="file-grid-actions">
+              {isDirectory ? (
+                <button
+                  type="button"
+                  className="pill-button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpen(item);
+                  }}
+                >
+                  Open
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="pill-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect(item);
+                      onQuickLook(item);
+                    }}
+                  >
+                    Quick Look
+                  </button>
+                  <button
+                    type="button"
+                    className="pill-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect(item);
+                      onDownload(item);
+                    }}
+                  >
+                    Download
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                className="pill-button subtle"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelect(item);
+                  onRename(item);
+                }}
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                className="pill-button danger"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelect(item);
+                  onDelete(item);
+                }}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                className="pill-button subtle"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelect(item);
+                  onToggleLock(item);
+                }}
+              >
+                {item.isLocked ? 'Unlock' : 'Lock'}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderListView = () => (
     <table className="file-table">
       <thead>
         <tr>
@@ -31,17 +206,38 @@ const FileList = ({ items, onOpen, onRename, onDelete, onToggleLock }) => {
       <tbody>
         {items.map((item) => {
           const isDirectory = item.type === 'directory';
-          const icon = isDirectory ? '📁' : '📄';
+          const icon = getFileGlyph(item);
           const lockIcon = item.isLocked ? '🔒' : '🔓';
           const modified = new Date(item.modified).toLocaleString();
+          const isSelected = selectedPath === item.path;
+
           return (
             <tr
-              key={item.name}
+              key={item.path || item.name}
               tabIndex={0}
-              onDoubleClick={() => isDirectory && onOpen(item)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && isDirectory) {
+              className={isSelected ? 'selected' : ''}
+              onClick={() => {
+                onSelect(item);
+              }}
+              onDoubleClick={() => {
+                onSelect(item);
+                if (isDirectory) {
                   onOpen(item);
+                } else {
+                  onQuickLook(item);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  if (isDirectory) {
+                    onOpen(item);
+                  } else {
+                    onQuickLook(item);
+                  }
+                }
+                if (event.key === ' ' && !isDirectory) {
+                  event.preventDefault();
+                  onQuickLook(item);
                 }
               }}
             >
@@ -56,18 +252,75 @@ const FileList = ({ items, onOpen, onRename, onDelete, onToggleLock }) => {
               <td>{modified}</td>
               <td>{item.isLocked ? 'Locked' : 'Unlocked'}</td>
               <td className="row-actions">
-                {isDirectory && (
-                  <button type="button" className="link" onClick={() => onOpen(item)}>
+                {isDirectory ? (
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect(item);
+                      onOpen(item);
+                    }}
+                  >
                     Open
                   </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="link"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onSelect(item);
+                        onQuickLook(item);
+                      }}
+                    >
+                      Quick Look
+                    </button>
+                    <button
+                      type="button"
+                      className="link"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onSelect(item);
+                        onDownload(item);
+                      }}
+                    >
+                      Download
+                    </button>
+                  </>
                 )}
-                <button type="button" className="link" onClick={() => onRename(item)}>
+                <button
+                  type="button"
+                  className="link"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(item);
+                    onRename(item);
+                  }}
+                >
                   Rename
                 </button>
-                <button type="button" className="link warning" onClick={() => onDelete(item)}>
+                <button
+                  type="button"
+                  className="link warning"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(item);
+                    onDelete(item);
+                  }}
+                >
                   Delete
                 </button>
-                <button type="button" className="link" onClick={() => onToggleLock(item)}>
+                <button
+                  type="button"
+                  className="link"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(item);
+                    onToggleLock(item);
+                  }}
+                >
                   {lockIcon} {item.isLocked ? 'Unlock' : 'Lock'}
                 </button>
               </td>
@@ -77,6 +330,8 @@ const FileList = ({ items, onOpen, onRename, onDelete, onToggleLock }) => {
       </tbody>
     </table>
   );
+
+  return viewMode === 'grid' ? renderGridView() : renderListView();
 };
 
 export default FileList;

@@ -1,6 +1,6 @@
 const rawBase = import.meta.env.VITE_API_URL || '';
 const trimmedBase = rawBase.replace(/\/$/, '');
-const API_ROOT = trimmedBase
+export const API_ROOT = trimmedBase
   ? trimmedBase.endsWith('/api')
     ? trimmedBase
     : `${trimmedBase}/api`
@@ -90,4 +90,65 @@ export function unlockItem(path, password) {
     method: 'POST',
     body: { path, password },
   });
+}
+
+export async function fetchFileContent(path, { password, download } = {}) {
+  if (!path) {
+    throw new Error('Path is required to fetch file content');
+  }
+
+  const params = new URLSearchParams();
+  params.set('path', path);
+  if (download) {
+    params.set('download', '1');
+  }
+
+  const headers = {};
+  if (password) {
+    headers['x-item-password'] = password;
+  }
+
+  const url = `${API_ROOT}/items/content?${params.toString()}`;
+  const response = await fetch(url, { headers });
+  const contentType = response.headers.get('content-type') || 'application/octet-stream';
+
+  if (!response.ok) {
+    let message = 'Unable to fetch file';
+    try {
+      const text = await response.text();
+      if (text) {
+        try {
+          const payload = JSON.parse(text);
+          if (payload?.message) {
+            message = payload.message;
+          } else {
+            message = text;
+          }
+        } catch (parseError) {
+          message = text;
+        }
+      }
+    } catch (readError) {
+      message = readError.message || message;
+    }
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get('content-disposition') || '';
+  const encodedFileNameMatch = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+  const basicFileNameMatch = /filename="?([^";]+)"?/i.exec(disposition);
+  const encodedFileName = encodedFileNameMatch?.[1] || basicFileNameMatch?.[1] || '';
+  let filename = path.split('/').pop() || 'download';
+  if (encodedFileName) {
+    try {
+      filename = decodeURIComponent(encodedFileName);
+    } catch (error) {
+      filename = encodedFileName;
+    }
+  }
+
+  return { blob, contentType, filename };
 }
