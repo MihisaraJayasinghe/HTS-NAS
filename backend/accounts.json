@@ -1,0 +1,38 @@
+{
+  "users": {
+    "Admin": {
+      "username": "Admin",
+      "role": "admin",
+      "passwordHash": "$2a$10$4hL7ptQIXnEKMMArDBtAXendKqCPvV4D2zKN3d5ZHk6w3AxkX1MEK",
+      "access": [],
+      "createdAt": "2025-09-17T09:05:27.215Z",
+      "updatedAt": "2025-09-17T09:05:27.215Z"
+    },
+    "Test": {
+      "username": "Test",
+      "role": "user",
+      "passwordHash": "$2a$10$cpoemC1hN7vtAHA6PKPE/.JQf2Vc1GDA1MaRRLrKr3KISnRlNNqdK",
+      "access": [
+        {
+          "path": "testns",
+          "password": "1234"
+        }
+      ],
+      "createdAt": "2025-09-17T09:11:36.077Z",
+      "updatedAt": "2025-09-17T09:28:16.432Z"
+    },
+    "Test2": {
+      "username": "Test2",
+      "role": "user",
+      "passwordHash": "$2a$10$b..olLRkjQfclvapCR.O3OKy7OGpR1suaJZ0mzGGp/UPrVov0k6BC",
+      "access": [
+        {
+          "path": "testns/Security",
+          "password": "1234"
+        }
+      ],
+      "createdAt": "2025-09-17T09:36:14.982Z",
+      "updatedAt": "2025-09-17T09:38:36.760Z"
+    }
+  }
+}
