@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import FileManager from './FileManager.jsx';
 import AccessList from './AccessList.jsx';
 import ChangePasswordForm from './ChangePasswordForm.jsx';
+import ProtocolHub from './ProtocolHub.jsx';
 
 const normalizePath = (input) => {
   if (typeof input !== 'string') {
@@ -47,6 +48,10 @@ const UserDashboard = ({ user, onLogout, onPasswordChange }) => {
           Sign out
         </button>
       </header>
+
+      <section className="dashboard-section">
+        <ProtocolHub />
+      </section>
 
       <section className="dashboard-section">
         <AccessList access={accessList} selectedPath={selectedPath} onSelect={setSelectedPath} />
