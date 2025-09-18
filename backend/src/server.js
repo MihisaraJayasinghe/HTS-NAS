@@ -63,6 +63,17 @@ const NAS_ROOT = process.env.NAS_ROOT
 const LOCKS_FILE = path.join(__dirname, '..', 'locks.json');
 const ACCOUNTS_FILE = path.join(__dirname, '..', 'accounts.json');
 const FRONTEND_DIST = path.join(__dirname, '..', '..', 'frontend', 'dist');
+const CHAT_FILE = path.join(__dirname, '..', 'chat.json');
+
+const DEFAULT_CHAT_GROUPS = [
+  {
+    id: 'group:public',
+    name: 'Public Lobby',
+    description: 'Chat with everyone in the workspace.',
+  },
+];
+
+const MAX_CHAT_MESSAGE_LENGTH = 2000;
 
 const sessions = new Map();
 
@@ -160,6 +171,135 @@ async function ensureAccountsInitialized() {
       updatedAt: now,
     };
     await saveAccounts(accounts);
+  }
+}
+
+async function loadChatData() {
+  try {
+    const raw = await fs.readFile(CHAT_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.conversations !== 'object') {
+      throw new Error('Invalid chat store format');
+    }
+    const normalized = {};
+    Object.entries(parsed.conversations).forEach(([id, value]) => {
+      if (value && typeof value === 'object') {
+        normalized[id] = {
+          id,
+          type: value.type === 'group' ? 'group' : 'dm',
+          name: typeof value.name === 'string' ? value.name : undefined,
+          description: typeof value.description === 'string' ? value.description : undefined,
+          participants: Array.isArray(value.participants) ? value.participants : [],
+          messages: Array.isArray(value.messages) ? value.messages : [],
+          createdAt: value.createdAt || new Date().toISOString(),
+        };
+      }
+    });
+    return { conversations: normalized };
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.name === 'SyntaxError' || error.message === 'Invalid chat store format') {
+      const empty = { conversations: {} };
+      await fs.writeFile(CHAT_FILE, JSON.stringify(empty, null, 2));
+      return empty;
+    }
+    throw error;
+  }
+}
+
+async function saveChatData(chatData) {
+  const payload = {
+    conversations: chatData.conversations || {},
+  };
+  await fs.writeFile(CHAT_FILE, JSON.stringify(payload, null, 2));
+}
+
+function buildDmConversationId(userA, userB) {
+  const participants = [userA, userB].map((name) => String(name || '').trim());
+  participants.sort((a, b) => a.localeCompare(b));
+  return `dm:${participants.join('|')}`;
+}
+
+function ensureDmConversation(chatData, userA, userB) {
+  const participants = [userA, userB].map((name) => String(name || '').trim());
+  if (participants.some((name) => !name)) {
+    const error = new Error('Both participants are required for a direct message');
+    error.status = 400;
+    throw error;
+  }
+  participants.sort((a, b) => a.localeCompare(b));
+  const [first, second] = participants;
+  const id = buildDmConversationId(first, second);
+  const existing = chatData.conversations[id];
+  if (existing && existing.type === 'dm') {
+    let changed = false;
+    if (!Array.isArray(existing.participants) || existing.participants.length !== 2) {
+      existing.participants = [first, second];
+      changed = true;
+    }
+    if (!Array.isArray(existing.messages)) {
+      existing.messages = [];
+      changed = true;
+    }
+    return { conversation: existing, changed };
+  }
+  const created = {
+    id,
+    type: 'dm',
+    participants: [first, second],
+    messages: existing && Array.isArray(existing.messages) ? existing.messages : [],
+    createdAt: existing?.createdAt || new Date().toISOString(),
+  };
+  chatData.conversations[id] = created;
+  return { conversation: created, changed: true };
+}
+
+function ensureGroupConversation(chatData, groupId) {
+  const group = DEFAULT_CHAT_GROUPS.find((item) => item.id === groupId);
+  if (!group) {
+    const error = new Error('Unknown chat group');
+    error.status = 404;
+    throw error;
+  }
+  const existing = chatData.conversations[group.id];
+  if (existing && existing.type === 'group') {
+    let changed = false;
+    if (!Array.isArray(existing.messages)) {
+      existing.messages = [];
+      changed = true;
+    }
+    if (existing.name !== group.name) {
+      existing.name = group.name;
+      changed = true;
+    }
+    if (existing.description !== group.description) {
+      existing.description = group.description;
+      changed = true;
+    }
+    return { conversation: existing, changed };
+  }
+  const created = {
+    id: group.id,
+    type: 'group',
+    name: group.name,
+    description: group.description,
+    messages: existing && Array.isArray(existing.messages) ? existing.messages : [],
+    createdAt: existing?.createdAt || new Date().toISOString(),
+  };
+  chatData.conversations[group.id] = created;
+  return { conversation: created, changed: true };
+}
+
+async function ensureChatDataInitialized() {
+  const chatData = await loadChatData();
+  let changed = false;
+  DEFAULT_CHAT_GROUPS.forEach((group) => {
+    const { changed: groupChanged } = ensureGroupConversation(chatData, group.id);
+    if (groupChanged) {
+      changed = true;
+    }
+  });
+  if (changed) {
+    await saveChatData(chatData);
   }
 }
 
@@ -448,6 +588,157 @@ const upload = multer({ storage });
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
+
+app.get(
+  '/api/chat/roster',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const accounts = req.accounts || (await loadAccounts());
+    const users = Object.values(accounts.users || {})
+      .filter((account) => account.username !== req.account.username)
+      .map((account) => ({
+        username: account.username,
+        role: account.role,
+      }))
+      .sort((a, b) => a.username.localeCompare(b.username));
+
+    res.json({
+      users,
+      groups: DEFAULT_CHAT_GROUPS.map(({ id, name, description }) => ({
+        id,
+        name,
+        description,
+      })),
+    });
+  })
+);
+
+app.get(
+  '/api/chat/messages',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const targetUsernameRaw = req.query.username ? String(req.query.username) : '';
+    const conversationIdRaw = req.query.conversationId ? String(req.query.conversationId) : '';
+
+    if (!targetUsernameRaw && !conversationIdRaw) {
+      return res.status(400).json({ message: 'Select a conversation to view messages' });
+    }
+
+    const chatData = await loadChatData();
+    let conversation;
+    let changed = false;
+
+    if (targetUsernameRaw) {
+      const safeUsername = sanitizeUsername(targetUsernameRaw);
+      if (!safeUsername) {
+        return res.status(400).json({ message: 'Invalid recipient' });
+      }
+      const targetAccount = req.accounts.users[safeUsername];
+      if (!targetAccount) {
+        return res.status(404).json({ message: 'Recipient not found' });
+      }
+      if (targetAccount.username === req.account.username) {
+        return res.status(400).json({ message: 'Cannot open a direct conversation with yourself' });
+      }
+      const ensured = ensureDmConversation(chatData, req.account.username, targetAccount.username);
+      conversation = ensured.conversation;
+      changed = ensured.changed;
+    } else {
+      const ensured = ensureGroupConversation(chatData, conversationIdRaw);
+      conversation = ensured.conversation;
+      changed = ensured.changed;
+    }
+
+    if (changed) {
+      await saveChatData(chatData);
+    }
+
+    const messages = Array.isArray(conversation.messages) ? conversation.messages : [];
+    const normalizedMessages = messages.map((entry, index) => ({
+      id: entry.id || `${conversation.id}-${index}`,
+      sender: entry.sender,
+      content: typeof entry.content === 'string' ? entry.content : '',
+      timestamp: entry.timestamp || null,
+    }));
+
+    return res.json({
+      conversationId: conversation.id,
+      type: conversation.type,
+      name:
+        conversation.name ||
+        (conversation.type === 'dm'
+          ? conversation.participants?.find((name) => name !== req.account.username)
+          : undefined),
+      description: conversation.description,
+      participants: conversation.participants || [],
+      messages: normalizedMessages,
+    });
+  })
+);
+
+app.post(
+  '/api/chat/messages',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const rawContent = typeof req.body?.content === 'string' ? req.body.content : '';
+    const content = rawContent.trim();
+    if (!content) {
+      return res.status(400).json({ message: 'Message cannot be empty' });
+    }
+    if (content.length > MAX_CHAT_MESSAGE_LENGTH) {
+      return res
+        .status(400)
+        .json({ message: `Message cannot exceed ${MAX_CHAT_MESSAGE_LENGTH} characters` });
+    }
+
+    const targetUsernameRaw = typeof req.body?.username === 'string' ? req.body.username : '';
+    const conversationIdRaw = typeof req.body?.conversationId === 'string' ? req.body.conversationId : '';
+
+    if (!targetUsernameRaw && !conversationIdRaw) {
+      return res.status(400).json({ message: 'Specify a recipient or conversation' });
+    }
+
+    const chatData = await loadChatData();
+    let conversation;
+
+    if (targetUsernameRaw) {
+      const safeUsername = sanitizeUsername(targetUsernameRaw);
+      if (!safeUsername) {
+        return res.status(400).json({ message: 'Invalid recipient' });
+      }
+      const targetAccount = req.accounts.users[safeUsername];
+      if (!targetAccount) {
+        return res.status(404).json({ message: 'Recipient not found' });
+      }
+      if (targetAccount.username === req.account.username) {
+        return res.status(400).json({ message: 'Cannot send messages to yourself' });
+      }
+      ({ conversation } = ensureDmConversation(chatData, req.account.username, targetAccount.username));
+    } else {
+      ({ conversation } = ensureGroupConversation(chatData, conversationIdRaw));
+    }
+
+    if (!Array.isArray(conversation.messages)) {
+      conversation.messages = [];
+    }
+
+    const entry = {
+      id: crypto.randomUUID(),
+      sender: req.account.username,
+      content,
+      timestamp: new Date().toISOString(),
+    };
+
+    conversation.messages.push(entry);
+    await saveChatData(chatData);
+
+    return res.status(201).json({
+      conversationId: conversation.id,
+      type: conversation.type,
+      entry,
+    });
+  })
+);
 
 app.post(
   '/api/auth/login',
@@ -1076,7 +1367,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-ensureAccountsInitialized()
+Promise.all([ensureAccountsInitialized(), ensureChatDataInitialized()])
   .then(() => {
     app.listen(PORT, () => {
       // eslint-disable-next-line no-console
@@ -1086,6 +1377,6 @@ ensureAccountsInitialized()
     });
   })
   .catch((error) => {
-    console.error('Failed to initialize account store', error);
+    console.error('Failed to initialize data stores', error);
     process.exit(1);
   });

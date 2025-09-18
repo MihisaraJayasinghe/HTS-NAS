@@ -3,6 +3,7 @@ import FileManager from './FileManager.jsx';
 import AccessList from './AccessList.jsx';
 import ChangePasswordForm from './ChangePasswordForm.jsx';
 import ProtocolHub from './ProtocolHub.jsx';
+import ChatPanel from './chat/ChatPanel.jsx';
 
 const normalizePath = (input) => {
   if (typeof input !== 'string') {
@@ -49,30 +50,40 @@ const UserDashboard = ({ user, onLogout, onPasswordChange }) => {
         </button>
       </header>
 
-      <section className="dashboard-section">
-        <ProtocolHub />
-      </section>
+      <div className="dashboard-grid">
+        <div className="dashboard-column storage-column">
+          <section className="dashboard-section">
+            <AccessList access={accessList} selectedPath={selectedPath} onSelect={setSelectedPath} />
+          </section>
 
-      <section className="dashboard-section">
-        <AccessList access={accessList} selectedPath={selectedPath} onSelect={setSelectedPath} />
-      </section>
+          {hasAssignedAccess && (
+            <section className="dashboard-section">
+              <FileManager
+                title="Your file explorer"
+                subtitle="All changes you make stay within your assigned folders."
+                initialPath={selectedPath}
+                rootPath={selectedPath}
+                allowLockToggle={false}
+                passwordLookup={passwordLookup}
+              />
+            </section>
+          )}
+        </div>
 
-      {hasAssignedAccess && (
-        <section className="dashboard-section">
-          <FileManager
-            title="Your file explorer"
-            subtitle="All changes you make stay within your assigned folders."
-            initialPath={selectedPath}
-            rootPath={selectedPath}
-            allowLockToggle={false}
-            passwordLookup={passwordLookup}
-          />
-        </section>
-      )}
+        <div className="dashboard-column insights-column">
+          <section className="dashboard-section">
+            <ProtocolHub />
+          </section>
 
-      <section className="dashboard-section">
-        <ChangePasswordForm title="Update your password" onSubmit={onPasswordChange} />
-      </section>
+          <section className="dashboard-section">
+            <ChatPanel currentUser={user} />
+          </section>
+
+          <section className="dashboard-section">
+            <ChangePasswordForm title="Update your password" onSubmit={onPasswordChange} />
+          </section>
+        </div>
+      </div>
     </div>
   );
 };
