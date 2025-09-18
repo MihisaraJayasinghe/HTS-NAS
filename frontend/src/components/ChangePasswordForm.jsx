@@ -39,10 +39,8 @@ const ChangePasswordForm = ({ title = 'Change Password', onSubmit }) => {
   return (
     <form className="panel" onSubmit={handleSubmit}>
       <div className="panel-header">
-        <div className="panel-header-copy">
-          <h2>{title}</h2>
-          <p>Refresh your NAS password for safety.</p>
-        </div>
+        <h2>{title}</h2>
+        <p>Update your account password to keep your storage secure.</p>
       </div>
       {status.error && (
         <div className="alert error" role="alert">
