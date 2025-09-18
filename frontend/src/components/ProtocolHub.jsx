@@ -361,20 +361,9 @@ const ProtocolHub = () => {
                 {department.icon}
               </span>
               <span className="protocol-card-label">{department.label}</span>
-              <div className="protocol-card-preview">
-                {department.preview.map((item) => (
-                  <span key={item} className="protocol-chip">
-                    {item}
-                  </span>
-                ))}
-              </div>
-              <div className="protocol-card-tags">
-                {department.tags.map((tag) => (
-                  <span key={`${department.id}-${tag}`} className="protocol-card-tag">
-                    {tag}
-                  </span>
-                ))}
-              </div>
+              <span className="protocol-card-hint" aria-hidden="true">
+                View deck →
+              </span>
             </button>
           ))}
         </div>
