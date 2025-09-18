@@ -539,10 +539,10 @@ const FileManager = ({
   const quickLookDownloadHandler = quickLook.item ? () => handleDownload(quickLook.item) : undefined;
 
   return (
-    <div className="file-manager">
-      <header className="app-header">
-        <h1>{title}</h1>
-        {subtitle ? <p className="subtitle">{subtitle}</p> : null}
+    <div className="flex h-full flex-col gap-5 rounded-2xl border border-white/55 bg-white/88 p-5 shadow-xl shadow-blue-500/10 backdrop-blur-lg">
+      <header className="space-y-1">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
+        {subtitle ? <p className="text-sm font-medium text-slate-500 sm:text-base">{subtitle}</p> : null}
       </header>
 
       <Toolbar
@@ -565,18 +565,26 @@ const FileManager = ({
       <Breadcrumbs breadcrumbs={breadcrumbs} onNavigate={handleNavigate} />
 
       {error && (
-        <div className="alert error" role="alert">
+        <div
+          className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-600 shadow-sm"
+          role="alert"
+        >
           {error}
         </div>
       )}
       {message && (
-        <div className="alert success" role="status">
+        <div
+          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-600 shadow-sm"
+          role="status"
+        >
           {message}
         </div>
       )}
 
       {loading ? (
-        <div className="loading">Loading…</div>
+        <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed border-blue-200 bg-blue-50/70 text-sm font-semibold text-blue-600">
+          Loading…
+        </div>
       ) : (
         <FileList
           items={items}

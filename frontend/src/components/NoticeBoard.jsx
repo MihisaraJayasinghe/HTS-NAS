@@ -99,61 +99,83 @@ const NoticeBoard = ({ currentUser }) => {
   const isSubmittingDisabled = !draft.trim() || isPosting;
 
   return (
-    <div className="panel notice-panel">
-      <div className="panel-header">
-        <h2>Team notices</h2>
-        <p>Share quick updates that everyone can see.</p>
+    <div className="flex h-full flex-col gap-5 rounded-2xl border border-white/50 bg-white/88 p-5 shadow-xl shadow-blue-500/10 backdrop-blur-lg">
+      <div className="space-y-1">
+        <h2 className="text-lg font-bold text-slate-900 sm:text-xl">Team notices</h2>
+        <p className="text-sm font-medium text-slate-500">Share quick updates that everyone can see.</p>
       </div>
-      <div className="panel-content notice-content">
-        {error && (
-          <div className="alert error" role="alert">
-            {error}
-          </div>
-        )}
-        <div className="notice-feed" aria-live="polite">
-          {loading ? (
-            <div className="notice-placeholder">Loading notices…</div>
-          ) : notices.length === 0 ? (
-            <div className="notice-placeholder">No notices yet. Be the first to post.</div>
-          ) : (
-            <ul className="notice-list">
-              {notices.map((notice) => {
-                const isOwnNotice = notice.author === username;
-                const displayName = isOwnNotice ? 'You' : notice.author;
-                return (
-                  <li key={notice.id} className={`notice-item${isOwnNotice ? ' own' : ''}`}>
-                    <div className="notice-meta">
-                      <span className="notice-author">{displayName}</span>
-                      {notice.timestamp && (
-                        <time dateTime={notice.timestamp} className="notice-time">
-                          {formatTimestamp(notice.timestamp)}
-                        </time>
-                      )}
-                    </div>
-                    <p className="notice-message">{notice.message}</p>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+      {error && (
+        <div
+          className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-600 shadow-sm shadow-rose-200/60"
+          role="alert"
+        >
+          {error}
         </div>
-        <form className="notice-composer" onSubmit={handleSubmit}>
-          <textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Post a new notice for the team"
-            rows={2}
-            maxLength={2000}
-            disabled={isPosting}
-          />
-          <div className="notice-composer-actions">
-            <span className="notice-char-count">{draft.length}/2000</span>
-            <button type="submit" className="button" disabled={isSubmittingDisabled}>
-              {isPosting ? 'Posting…' : 'Post notice'}
-            </button>
+      )}
+      <div
+        className="flex flex-1 flex-col gap-4 rounded-2xl border border-dashed border-blue-200/50 bg-blue-50/40 p-4"
+        aria-live="polite"
+      >
+        {loading ? (
+          <div className="flex flex-1 items-center justify-center text-sm font-semibold text-slate-500">
+            Loading notices…
           </div>
-        </form>
+        ) : notices.length === 0 ? (
+          <div className="flex flex-1 items-center justify-center text-sm font-semibold text-slate-500">
+            No notices yet. Be the first to post.
+          </div>
+        ) : (
+          <ul className="flex max-h-72 flex-col gap-3 overflow-y-auto pr-1 text-sm">
+            {notices.map((notice) => {
+              const isOwnNotice = notice.author === username;
+              const displayName = isOwnNotice ? 'You' : notice.author;
+              return (
+                <li
+                  key={notice.id}
+                  className={`rounded-2xl border px-4 py-3 shadow-sm transition ${
+                    isOwnNotice
+                      ? 'border-emerald-300 bg-emerald-50/80 text-emerald-700 shadow-emerald-200/50'
+                      : 'border-blue-200 bg-white/90 text-slate-700 shadow-slate-200/60'
+                  }`}
+                >
+                  <div className="flex items-baseline gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <span className="text-slate-600">{displayName}</span>
+                    {notice.timestamp && (
+                      <time dateTime={notice.timestamp} className="text-slate-400">
+                        {formatTimestamp(notice.timestamp)}
+                      </time>
+                    )}
+                  </div>
+                  <p className="mt-2 text-sm font-medium text-slate-700 whitespace-pre-wrap">
+                    {notice.message}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
+      <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
+        <textarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder="Post a new notice for the team"
+          rows={3}
+          maxLength={2000}
+          disabled={isPosting}
+          className="w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner shadow-slate-900/5 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/60 disabled:cursor-not-allowed disabled:opacity-60"
+        />
+        <div className="flex items-center justify-between text-xs font-semibold text-slate-400 sm:text-sm">
+          <span>{draft.length}/2000</span>
+          <button
+            type="submit"
+            className="inline-flex items-center justify-center rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSubmittingDisabled}
+          >
+            {isPosting ? 'Posting…' : 'Post notice'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 };

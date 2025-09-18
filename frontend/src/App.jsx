@@ -83,18 +83,27 @@ const App = () => {
     await refreshUser();
   };
 
+  const shellClass =
+    'mx-auto flex min-h-screen w-full max-w-[1500px] items-center justify-center px-4 py-12 sm:px-8 lg:px-16 lg:py-16';
+  const cardClass =
+    'w-full overflow-hidden rounded-[32px] border border-white/15 bg-white/80 p-6 shadow-2xl shadow-blue-500/10 backdrop-blur-2xl sm:p-9 lg:p-12';
+
   if (authState.status === 'loading') {
     return (
-      <div className="app-container centered">
-        <div className="loading">Loading…</div>
+      <div className={shellClass}>
+        <div className={`${cardClass} flex items-center justify-center`}> 
+          <div className="text-lg font-semibold text-blue-600">Loading…</div>
+        </div>
       </div>
     );
   }
 
   if (authState.status !== 'authenticated' || !authState.user) {
     return (
-      <div className="app-container centered auth-layout">
-        <LoginForm onSubmit={handleLogin} error={authError} />
+      <div className={shellClass}>
+        <div className={cardClass}>
+          <LoginForm onSubmit={handleLogin} error={authError} />
+        </div>
       </div>
     );
   }
@@ -102,25 +111,29 @@ const App = () => {
   const { user } = authState;
   if (user.role === 'admin') {
     return (
-      <div className="app-container dashboard-container">
-        <AdminDashboard
+      <div className={shellClass}>
+        <div className={cardClass}>
+          <AdminDashboard
+            user={user}
+            onLogout={handleLogout}
+            onPasswordChange={handlePasswordChange}
+            onRefreshUser={refreshUser}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={shellClass}>
+      <div className={cardClass}>
+        <UserDashboard
           user={user}
           onLogout={handleLogout}
           onPasswordChange={handlePasswordChange}
           onRefreshUser={refreshUser}
         />
       </div>
-    );
-  }
-
-  return (
-    <div className="app-container dashboard-container">
-      <UserDashboard
-        user={user}
-        onLogout={handleLogout}
-        onPasswordChange={handlePasswordChange}
-        onRefreshUser={refreshUser}
-      />
     </div>
   );
 };
