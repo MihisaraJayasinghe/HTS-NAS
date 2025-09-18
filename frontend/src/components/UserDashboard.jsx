@@ -3,6 +3,7 @@ import FileManager from './FileManager.jsx';
 import AccessList from './AccessList.jsx';
 import ChangePasswordForm from './ChangePasswordForm.jsx';
 import ProtocolHub from './ProtocolHub.jsx';
+ 
 
 const HUB_MAILBOXES = [
   {
@@ -90,6 +91,7 @@ const HUB_CHAT_THREADS = {
     { id: 'it', icon: '👤', name: 'Ravi · IT Ops', detail: 'DM · secure', status: 'Ping' },
   ],
 };
+ 
 
 const normalizePath = (input) => {
   if (typeof input !== 'string') {
@@ -189,6 +191,7 @@ const UserDashboard = ({ user, onLogout, onPasswordChange }) => {
         </div>
       </header>
 
+ 
       <div className="dashboard-grid">
         <div className="dashboard-main">
           <AccessList access={accessList} selectedPath={selectedPath} onSelect={setSelectedPath} />
@@ -213,6 +216,25 @@ const UserDashboard = ({ user, onLogout, onPasswordChange }) => {
           <ProtocolHub
             hasStorageAccess={hasAssignedAccess}
             onLaunchStorage={handleLaunchStorage}
+ 
+      <section className="dashboard-section">
+        <ProtocolHub />
+      </section>
+
+      <section className="dashboard-section">
+        <AccessList access={accessList} selectedPath={selectedPath} onSelect={setSelectedPath} />
+      </section>
+
+      {hasAssignedAccess && (
+        <section className="dashboard-section">
+          <FileManager
+            title="Your file explorer"
+            subtitle="All changes you make stay within your assigned folders."
+            initialPath={selectedPath}
+            rootPath={selectedPath}
+            allowLockToggle={false}
+            passwordLookup={passwordLookup}
+ 
           />
 
           <div className="panel hub-card mail-card">
