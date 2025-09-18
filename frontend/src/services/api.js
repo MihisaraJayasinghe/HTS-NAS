@@ -218,3 +218,36 @@ export function deleteUser(username) {
     method: 'DELETE',
   });
 }
+
+export function fetchChatRoster() {
+  return request('/chat/roster');
+}
+
+export function fetchChatMessages({ username, conversationId } = {}) {
+  const params = new URLSearchParams();
+  if (username) {
+    params.set('username', username);
+  }
+  if (conversationId) {
+    params.set('conversationId', conversationId);
+  }
+  const query = params.toString();
+  if (!query) {
+    throw new Error('username or conversationId is required to load chat messages');
+  }
+  return request(`/chat/messages?${query}`);
+}
+
+export function sendChatMessage({ username, conversationId, content }) {
+  const body = { content };
+  if (username) {
+    body.username = username;
+  }
+  if (conversationId) {
+    body.conversationId = conversationId;
+  }
+  return request('/chat/messages', {
+    method: 'POST',
+    body,
+  });
+}

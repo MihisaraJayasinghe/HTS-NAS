@@ -1,0 +1,11 @@
+{
+  "conversations": {
+    "group:public": {
+      "id": "group:public",
+      "type": "group",
+      "name": "Public Lobby",
+      "description": "Chat with everyone in the workspace.",
+      "messages": []
+    }
+  }
+}
