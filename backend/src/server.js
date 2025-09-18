@@ -64,6 +64,7 @@ const LOCKS_FILE = path.join(__dirname, '..', 'locks.json');
 const ACCOUNTS_FILE = path.join(__dirname, '..', 'accounts.json');
 const FRONTEND_DIST = path.join(__dirname, '..', '..', 'frontend', 'dist');
 const CHAT_FILE = path.join(__dirname, '..', 'chat.json');
+const NOTICES_FILE = path.join(__dirname, '..', 'notices.json');
 
 const DEFAULT_CHAT_GROUPS = [
   {
@@ -74,6 +75,7 @@ const DEFAULT_CHAT_GROUPS = [
 ];
 
 const MAX_CHAT_MESSAGE_LENGTH = 2000;
+const MAX_NOTICE_LENGTH = 2000;
 
 const sessions = new Map();
 
@@ -213,6 +215,31 @@ async function saveChatData(chatData) {
   await fs.writeFile(CHAT_FILE, JSON.stringify(payload, null, 2));
 }
 
+async function loadNotices() {
+  try {
+    const raw = await fs.readFile(NOTICES_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.notices)) {
+      throw new Error('Invalid notices store format');
+    }
+    return { notices: parsed.notices };
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.name === 'SyntaxError' || error.message === 'Invalid notices store format') {
+      const empty = { notices: [] };
+      await saveNotices(empty);
+      return empty;
+    }
+    throw error;
+  }
+}
+
+async function saveNotices(noticeData) {
+  const payload = {
+    notices: Array.isArray(noticeData?.notices) ? noticeData.notices : [],
+  };
+  await fs.writeFile(NOTICES_FILE, JSON.stringify(payload, null, 2));
+}
+
 function buildDmConversationId(userA, userB) {
   const participants = [userA, userB].map((name) => String(name || '').trim());
   participants.sort((a, b) => a.localeCompare(b));
@@ -301,6 +328,10 @@ async function ensureChatDataInitialized() {
   if (changed) {
     await saveChatData(chatData);
   }
+}
+
+async function ensureNoticesInitialized() {
+  await loadNotices();
 }
 
 function sanitizeUsername(input) {
@@ -737,6 +768,93 @@ app.post(
       type: conversation.type,
       entry,
     });
+  })
+);
+
+app.get(
+  '/api/notices',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const noticeData = await loadNotices();
+    const entries = Array.isArray(noticeData.notices) ? noticeData.notices : [];
+    const seenIds = new Set();
+    let changed = false;
+
+    const normalized = entries.map((entry) => {
+      const original = entry && typeof entry === 'object' ? entry : {};
+      let id = typeof original.id === 'string' && original.id ? original.id : '';
+      if (!id || seenIds.has(id)) {
+        id = crypto.randomUUID();
+        changed = true;
+      }
+      seenIds.add(id);
+      const author = typeof original.author === 'string' ? original.author : '';
+      if (author !== original.author) {
+        changed = true;
+      }
+      const message = typeof original.message === 'string' ? original.message : '';
+      if (message !== original.message) {
+        changed = true;
+      }
+      const timestamp = typeof original.timestamp === 'string' ? original.timestamp : null;
+      if (timestamp !== original.timestamp) {
+        changed = true;
+      }
+      return { id, author, message, timestamp };
+    });
+
+    if (changed) {
+      noticeData.notices = normalized;
+      await saveNotices(noticeData);
+    }
+
+    const sorted = normalized
+      .slice()
+      .sort((a, b) => {
+        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return timeB - timeA;
+      });
+
+    res.json({ notices: sorted });
+  })
+);
+
+app.post(
+  '/api/notices',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const rawMessage = typeof req.body?.message === 'string' ? req.body.message : '';
+    const message = rawMessage.trim();
+    if (!message) {
+      return res.status(400).json({ message: 'Notice message cannot be empty' });
+    }
+    if (message.length > MAX_NOTICE_LENGTH) {
+      return res
+        .status(400)
+        .json({ message: `Notice cannot exceed ${MAX_NOTICE_LENGTH} characters` });
+    }
+
+    const noticeData = await loadNotices();
+    if (!Array.isArray(noticeData.notices)) {
+      noticeData.notices = [];
+    }
+
+    const entry = {
+      id: crypto.randomUUID(),
+      author: req.account.username,
+      message,
+      timestamp: new Date().toISOString(),
+    };
+
+    noticeData.notices.push(entry);
+    if (noticeData.notices.length > 200) {
+      noticeData.notices = noticeData.notices.slice(-200);
+    }
+
+    await saveNotices(noticeData);
+
+    res.status(201).json({ notice: entry });
   })
 );
 
@@ -1367,7 +1485,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-Promise.all([ensureAccountsInitialized(), ensureChatDataInitialized()])
+Promise.all([ensureAccountsInitialized(), ensureChatDataInitialized(), ensureNoticesInitialized()])
   .then(() => {
     app.listen(PORT, () => {
       // eslint-disable-next-line no-console

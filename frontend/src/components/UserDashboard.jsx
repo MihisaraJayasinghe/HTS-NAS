@@ -3,6 +3,7 @@ import FileManager from './FileManager.jsx';
 import AccessList from './AccessList.jsx';
 import ChangePasswordForm from './ChangePasswordForm.jsx';
 import ProtocolHub from './ProtocolHub.jsx';
+import NoticeBoard from './NoticeBoard.jsx';
 import ChatPanel from './chat/ChatPanel.jsx';
 
 const normalizePath = (input) => {
@@ -73,6 +74,10 @@ const UserDashboard = ({ user, onLogout, onPasswordChange }) => {
         <div className="dashboard-column insights-column">
           <section className="dashboard-section">
             <ProtocolHub />
+          </section>
+
+          <section className="dashboard-section">
+            <NoticeBoard currentUser={user} />
           </section>
 
           <section className="dashboard-section">

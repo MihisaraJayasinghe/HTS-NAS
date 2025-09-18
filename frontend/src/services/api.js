@@ -251,3 +251,14 @@ export function sendChatMessage({ username, conversationId, content }) {
     body,
   });
 }
+
+export function fetchNotices() {
+  return request('/notices');
+}
+
+export function createNotice(message) {
+  return request('/notices', {
+    method: 'POST',
+    body: { message },
+  });
+}
