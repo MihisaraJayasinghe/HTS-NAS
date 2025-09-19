@@ -83,59 +83,146 @@ const App = () => {
     await refreshUser();
   };
 
-  const shellClass =
-    'mx-auto flex min-h-screen w-full max-w-[1500px] items-center justify-center px-4 py-12 sm:px-8 lg:px-16 lg:py-16';
-  const cardClass =
-    'w-full overflow-hidden rounded-[32px] border border-white/15 bg-white/80 p-6 shadow-2xl shadow-blue-500/10 backdrop-blur-2xl sm:p-9 lg:p-12';
+  const renderShell = ({ content, align = 'stretch', user = null }) => {
+    const mainClass = align === 'center' ? 'app-main app-main--center' : 'app-main';
 
-  if (authState.status === 'loading') {
     return (
-      <div className={shellClass}>
-        <div className={`${cardClass} flex items-center justify-center`}> 
-          <div className="text-lg font-semibold text-blue-600">Loading…</div>
+      <div className="app-shell">
+        <div className="app-shell__layer">
+          <div
+            className="orb-glow"
+            style={{
+              top: '-22%',
+              left: '-10%',
+              width: '540px',
+              height: '540px',
+              background: 'radial-gradient(circle, rgba(59,130,246,0.3), transparent 65%)',
+            }}
+          />
+          <div
+            className="orb-glow"
+            style={{
+              bottom: '-28%',
+              right: '-14%',
+              width: '620px',
+              height: '620px',
+              background: 'radial-gradient(circle, rgba(236,72,153,0.24), transparent 68%)',
+            }}
+          />
+          <div
+            className="orb-glow"
+            style={{
+              top: '30%',
+              right: '12%',
+              width: '320px',
+              height: '320px',
+              background: 'radial-gradient(circle, rgba(56,189,248,0.3), transparent 62%)',
+            }}
+          />
+        </div>
+        <div className="app-shell__inner">
+          <header className="app-topbar glass-panel backdrop-sheen">
+            <div className="app-brand">
+              <span className="app-brand__mark">HTS</span>
+              <div>
+                <span className="app-brand__title">Network Access Storage</span>
+                <span className="app-brand__subtitle">Fluid workspace</span>
+              </div>
+            </div>
+            {user ? (
+              <div className="app-topbar__meta">
+                <div className="app-topbar__user">
+                  <span>{user.username}</span>
+                  <span className="app-topbar__chip">{user.role}</span>
+                </div>
+                <button type="button" className="app-topbar__logout" onClick={handleLogout}>
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <span className="glass-chip">Secure access</span>
+            )}
+          </header>
+          <main className={mainClass}>
+            <div className="app-main__background">
+              <div className="chroma-grid" />
+              <div
+                className="orb-glow"
+                style={{
+                  top: '-18%',
+                  left: '12%',
+                  width: '320px',
+                  height: '320px',
+                  background: 'radial-gradient(circle, rgba(59,130,246,0.35), transparent 62%)',
+                }}
+              />
+              <div
+                className="orb-glow"
+                style={{
+                  bottom: '-24%',
+                  right: '-10%',
+                  width: '420px',
+                  height: '420px',
+                  background: 'radial-gradient(circle, rgba(99,102,241,0.28), transparent 65%)',
+                }}
+              />
+            </div>
+            <div className="app-main__content">{content}</div>
+          </main>
         </div>
       </div>
     );
+  };
+
+  if (authState.status === 'loading') {
+    return renderShell({
+      align: 'center',
+      content: (
+        <div className="flex flex-col items-center gap-4 text-center text-slate-200">
+          <span className="glass-chip text-xs tracking-[0.35em] text-blue-700">Loading…</span>
+          <p className="text-sm font-medium text-slate-400">
+            Preparing your storage workspace. Please hold on for a moment.
+          </p>
+        </div>
+      ),
+    });
   }
 
   if (authState.status !== 'authenticated' || !authState.user) {
-    return (
-      <div className={shellClass}>
-        <div className={cardClass}>
+    return renderShell({
+      align: 'center',
+      content: (
+        <div className="mx-auto w-full max-w-xl">
           <LoginForm onSubmit={handleLogin} error={authError} />
         </div>
-      </div>
-    );
+      ),
+    });
   }
 
   const { user } = authState;
   if (user.role === 'admin') {
-    return (
-      <div className={shellClass}>
-        <div className={cardClass}>
-          <AdminDashboard
-            user={user}
-            onLogout={handleLogout}
-            onPasswordChange={handlePasswordChange}
-            onRefreshUser={refreshUser}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={shellClass}>
-      <div className={cardClass}>
-        <UserDashboard
+    return renderShell({
+      user,
+      content: (
+        <AdminDashboard
           user={user}
-          onLogout={handleLogout}
           onPasswordChange={handlePasswordChange}
           onRefreshUser={refreshUser}
         />
-      </div>
-    </div>
-  );
+      ),
+    });
+  }
+
+  return renderShell({
+    user,
+    content: (
+      <UserDashboard
+        user={user}
+        onPasswordChange={handlePasswordChange}
+        onRefreshUser={refreshUser}
+      />
+    ),
+  });
 };
 
 export default App;

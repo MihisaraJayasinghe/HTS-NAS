@@ -100,14 +100,25 @@ const QuickLook = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur"
       role="dialog"
       aria-modal="true"
       aria-label={`Quick look for ${title}`}
       onClick={handleBackdropClick}
     >
-      <div className="flex w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200/40 bg-white/95 shadow-2xl shadow-slate-900/20">
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200/70 bg-slate-50/80 px-6 py-4">
+      <div className="glass-panel relative flex w-full max-w-5xl flex-col overflow-hidden">
+        <div className="pointer-events-none chroma-grid" />
+        <div
+          className="orb-glow"
+          style={{
+            top: '-25%',
+            left: '-15%',
+            width: '320px',
+            height: '320px',
+            background: 'radial-gradient(circle, rgba(59,130,246,0.4), transparent 65%)',
+          }}
+        />
+        <header className="relative z-10 flex items-start justify-between gap-4 border-b border-white/20 bg-white/30 px-6 py-4">
           <div className="space-y-1">
             <div className="text-lg font-semibold text-slate-900">{title}</div>
             {normalizedMime && !loading && !error && (
@@ -116,20 +127,22 @@ const QuickLook = ({
           </div>
           <button
             type="button"
-            className="rounded-full bg-white/80 px-3 py-1 text-xl font-semibold text-slate-400 shadow-sm transition hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+            className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xl font-semibold text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
             onClick={onClose}
             aria-label="Close quick look"
           >
             ×
           </button>
         </header>
-        <div className="flex min-h-[320px] flex-1 items-stretch justify-center bg-slate-100/60 px-4 py-4">
-          <div className="h-full w-full max-w-full">{content}</div>
+        <div className="relative z-10 flex min-h-[320px] flex-1 items-stretch justify-center bg-white/25 px-4 py-4">
+          <div className="h-full w-full max-w-full overflow-hidden rounded-2xl bg-white/40 p-2">
+            {content}
+          </div>
         </div>
-        <footer className="flex items-center justify-end gap-3 border-t border-slate-200/70 bg-white/90 px-6 py-4">
+        <footer className="relative z-10 flex items-center justify-end gap-3 border-t border-white/20 bg-white/30 px-6 py-4">
           <button
             type="button"
-            className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center rounded-full border border-white/25 bg-white/35 px-4 py-2 text-sm font-semibold text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition hover:border-white/35 hover:bg-white/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
             onClick={onDownload}
             disabled={!onDownload}
           >
@@ -137,7 +150,7 @@ const QuickLook = ({
           </button>
           <button
             type="button"
-            className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_20px_45px_-24px_rgba(79,70,229,0.85)] transition hover:shadow-[0_25px_55px_-22px_rgba(79,70,229,0.9)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
             onClick={onOpenInNewTab}
             disabled={!previewUrl}
           >

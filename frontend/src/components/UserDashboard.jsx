@@ -20,7 +20,7 @@ const normalizePath = (input) => {
     .replace(/\/+$/, '');
 };
 
-const UserDashboard = ({ user, onLogout, onPasswordChange }) => {
+const UserDashboard = ({ user, onPasswordChange }) => {
   const accessList = Array.isArray(user.access) ? user.access : [];
   const [selectedPath, setSelectedPath] = useState(accessList[0]?.path || '');
 
@@ -39,23 +39,23 @@ const UserDashboard = ({ user, onLogout, onPasswordChange }) => {
   const hasAssignedAccess = accessList.length > 0;
 
   return (
-    <div className="flex flex-col gap-6 lg:gap-7">
-      <header className="flex flex-col gap-4 rounded-2xl border border-white/40 bg-white/85 p-5 shadow-xl shadow-blue-500/10 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[2rem]">
-            Welcome, {user.username}
-          </h1>
-          <p className="text-sm font-medium text-slate-500 sm:text-base">
-            Browse and manage the folders shared with your account.
-          </p>
+    <div className="flex flex-col gap-7 text-slate-900">
+      <header className="glass-panel relative flex flex-col gap-4 overflow-hidden p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="pointer-events-none chroma-grid" />
+        <div className="relative z-10 space-y-2">
+          <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em] text-blue-600">
+            User Workspace
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-[2rem]">
+              Welcome, {user.username}
+            </h1>
+            <p className="text-sm font-medium text-slate-600 sm:text-base">
+              Browse and manage the folders shared with your account.
+            </p>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={onLogout}
-          className="inline-flex items-center justify-center rounded-full bg-rose-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-rose-500/30 transition hover:bg-rose-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500"
-        >
-          Sign out
-        </button>
+        <span className="relative z-10 glass-chip text-xs tracking-[0.35em] text-blue-700">Member</span>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">

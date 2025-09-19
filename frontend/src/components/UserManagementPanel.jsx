@@ -222,15 +222,16 @@ const UserManagementPanel = ({ onUsersChanged }) => {
   };
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:gap-6">
-      <div className="flex flex-col gap-5 rounded-2xl border border-white/50 bg-white/88 p-5 shadow-xl shadow-blue-500/10 backdrop-blur-lg">
-        <div className="space-y-1">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+      <div className="glass-panel relative flex flex-col gap-5 overflow-hidden p-5">
+        <div className="pointer-events-none chroma-grid" />
+        <div className="relative z-10 space-y-1">
           <h2 className="text-lg font-bold text-slate-900 sm:text-xl">User management</h2>
-          <p className="text-sm font-medium text-slate-500">Review accounts, assign folder access, and manage credentials.</p>
+          <p className="text-sm font-medium text-slate-600">Review accounts, assign folder access, and manage credentials.</p>
         </div>
         {error && (
           <div
-            className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-600 shadow-sm shadow-rose-200/60"
+            className="relative z-10 rounded-2xl border border-rose-200/70 bg-rose-100/80 px-4 py-3 text-sm font-semibold text-rose-600 shadow-[0_12px_30px_-18px_rgba(244,63,94,0.45)]"
             role="alert"
           >
             {error}
@@ -238,16 +239,16 @@ const UserManagementPanel = ({ onUsersChanged }) => {
         )}
         {message && (
           <div
-            className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-600 shadow-sm shadow-emerald-200/60"
+            className="relative z-10 rounded-2xl border border-emerald-200/70 bg-emerald-100/75 px-4 py-3 text-sm font-semibold text-emerald-600 shadow-[0_12px_30px_-18px_rgba(16,185,129,0.4)]"
             role="status"
           >
             {message}
           </div>
         )}
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)]">
+        <div className="relative z-10 grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)]">
           <div className="flex flex-col gap-3">
             {loading ? (
-              <div className="flex min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-blue-200/60 bg-blue-50/50 text-sm font-semibold text-slate-500">
+              <div className="flex min-h-[220px] items-center justify-center rounded-2xl border border-white/25 bg-white/30 text-sm font-semibold text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
                 Loading users…
               </div>
             ) : (
@@ -258,17 +259,17 @@ const UserManagementPanel = ({ onUsersChanged }) => {
                     <li key={user.username}>
                       <button
                         type="button"
-                        className={`flex w-full items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+                        className={`group flex w-full items-center justify-between rounded-2xl border px-4 py-2.5 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
                           isActive
-                            ? 'bg-blue-600/90 text-white shadow-lg shadow-blue-500/30'
-                            : 'bg-slate-900/5 text-slate-600 hover:bg-slate-900/10'
+                            ? 'border-blue-400/70 bg-gradient-to-r from-blue-500/35 via-blue-500/15 to-purple-400/20 text-white shadow-[0_24px_45px_-30px_rgba(59,130,246,0.7)]'
+                            : 'border-white/25 bg-white/25 text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] hover:border-white/35 hover:bg-white/35'
                         }`}
                         onClick={() => handleSelectUser(user.username)}
                       >
-                        <span>{user.username}</span>
+                        <span className={isActive ? 'text-white' : 'text-slate-700'}>{user.username}</span>
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${
-                            isActive ? 'bg-white/20 text-white' : 'bg-white text-slate-500'
+                            isActive ? 'bg-white/30 text-white' : 'bg-white/60 text-slate-600'
                           }`}
                         >
                           {user.role}
@@ -283,8 +284,9 @@ const UserManagementPanel = ({ onUsersChanged }) => {
           <div className="flex flex-col gap-5">
             {selectedUser ? (
               <>
-                <div className="flex flex-col gap-4 rounded-2xl border border-white/60 bg-white/85 p-4 shadow-sm">
-                  <div className="flex flex-col gap-1">
+                <div className="glass-panel relative flex flex-col gap-4 overflow-hidden p-4">
+                  <div className="pointer-events-none chroma-grid" />
+                  <div className="relative z-10 flex flex-col gap-1">
                     <h3 className="text-lg font-semibold text-slate-900">{selectedUser.username}</h3>
                     <p className="text-xs font-medium text-slate-400">
                       Created {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleString() : '—'}
@@ -293,40 +295,41 @@ const UserManagementPanel = ({ onUsersChanged }) => {
                       Updated {selectedUser.updatedAt ? new Date(selectedUser.updatedAt).toLocaleString() : '—'}
                     </p>
                   </div>
-                  <label className="flex flex-col gap-2 text-xs font-semibold text-slate-500">
+                  <label className="relative z-10 flex flex-col gap-2 text-xs font-semibold text-slate-500">
                     <span>Role</span>
                     <select
                       value={selectedUser.role}
                       onChange={handleRoleChange}
                       disabled={updatingUser || selectedUser.username === 'Admin'}
-                      className="w-full appearance-none rounded-2xl border border-slate-200 bg-white/80 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-inner shadow-slate-900/5 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                      className="w-full appearance-none rounded-2xl border border-white/35 bg-white/40 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
                     >
                       <option value="user">User</option>
                       <option value="admin">Admin</option>
                     </select>
                   </label>
                 </div>
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
+                <div className="glass-panel relative flex flex-col gap-3 overflow-hidden p-4">
+                  <div className="pointer-events-none chroma-grid" />
+                  <div className="relative z-10 flex items-center justify-between">
                     <h4 className="text-sm font-semibold text-slate-900">Folder access</h4>
                     <button
                       type="button"
-                      className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex items-center justify-center rounded-full border border-white/25 bg-white/30 px-3 py-1 text-xs font-semibold text-blue-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition hover:border-white/35 hover:bg-white/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={handleAddAccess}
                       disabled={savingAccess}
                     >
-                      Add folder
+                      + Add access
                     </button>
                   </div>
                   {accessDraft.length === 0 && (
-                    <p className="rounded-2xl bg-slate-900/5 px-4 py-3 text-sm font-medium text-slate-500">
+                    <p className="relative z-10 rounded-2xl border border-white/20 bg-white/25 px-4 py-3 text-sm font-medium text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
                       No folders assigned yet.
                     </p>
                   )}
-                  <div className="flex flex-col gap-3">
+                  <div className="relative z-10 flex flex-col gap-3">
                     {accessDraft.map((entry, index) => (
                       <div
-                        className="flex flex-col gap-2 rounded-2xl border border-white/60 bg-white/85 p-3 shadow-sm sm:flex-row sm:items-center"
+                        className="flex flex-col gap-2 rounded-2xl border border-white/30 bg-white/35 p-3 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.4)] sm:flex-row sm:items-center"
                         key={`${entry.path}-${index}`}
                       >
                         <input
@@ -334,18 +337,18 @@ const UserManagementPanel = ({ onUsersChanged }) => {
                           value={entry.path}
                           onChange={(event) => handleAccessChange(index, 'path', event.target.value)}
                           placeholder="Folder path (e.g. Projects/TeamA)"
-                          className="w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-inner shadow-slate-900/5 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                          className="w-full rounded-2xl border border-white/35 bg-white/40 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
                         />
                         <input
                           type="text"
                           value={entry.password}
                           onChange={(event) => handleAccessChange(index, 'password', event.target.value)}
                           placeholder="Password"
-                          className="w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-inner shadow-slate-900/5 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                          className="w-full rounded-2xl border border-white/35 bg-white/40 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
                         />
                         <button
                           type="button"
-                          className="inline-flex items-center justify-center rounded-full bg-slate-900/5 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-900/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center justify-center rounded-full border border-white/25 bg-white/30 px-4 py-2 text-sm font-semibold text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition hover:border-white/35 hover:bg-white/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                           onClick={() => handleRemoveAccess(index)}
                           disabled={savingAccess}
                         >
@@ -354,10 +357,10 @@ const UserManagementPanel = ({ onUsersChanged }) => {
                       </div>
                     ))}
                   </div>
-                  <div className="flex justify-end">
+                  <div className="relative z-10 flex justify-end">
                     <button
                       type="button"
-                      className="inline-flex items-center justify-center rounded-full bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_20px_45px_-24px_rgba(79,70,229,0.85)] transition hover:shadow-[0_25px_55px_-22px_rgba(79,70,229,0.9)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={handleSaveAccess}
                       disabled={savingAccess}
                     >
@@ -365,10 +368,10 @@ const UserManagementPanel = ({ onUsersChanged }) => {
                     </button>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-3">
+                <div className="relative z-10 flex flex-wrap gap-3">
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex items-center justify-center rounded-full border border-white/25 bg-white/30 px-4 py-2.5 text-sm font-semibold text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition hover:border-white/35 hover:bg-white/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={handleResetPassword}
                     disabled={updatingUser}
                   >
@@ -376,7 +379,7 @@ const UserManagementPanel = ({ onUsersChanged }) => {
                   </button>
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center rounded-full bg-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-500/30 transition hover:bg-rose-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-rose-500 via-rose-500 to-amber-400 px-4 py-2 text-sm font-semibold text-white shadow-[0_20px_45px_-24px_rgba(244,63,94,0.65)] transition hover:shadow-[0_28px_55px_-22px_rgba(248,113,113,0.7)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={handleDeleteUser}
                     disabled={selectedUser.username === 'Admin' || updatingUser}
                   >
@@ -385,22 +388,20 @@ const UserManagementPanel = ({ onUsersChanged }) => {
                 </div>
               </>
             ) : (
-              <p className="rounded-2xl bg-slate-900/5 px-4 py-3 text-sm font-medium text-slate-500">
+              <p className="relative z-10 rounded-2xl border border-white/20 bg-white/25 px-4 py-3 text-sm font-medium text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
                 Select a user to view details.
               </p>
             )}
           </div>
         </div>
       </div>
-      <form
-        className="flex flex-col gap-5 rounded-2xl border border-white/50 bg-white/88 p-5 shadow-xl shadow-blue-500/10 backdrop-blur-lg"
-        onSubmit={handleCreateUser}
-      >
-        <div className="space-y-1">
+      <form className="glass-panel relative flex flex-col gap-5 overflow-hidden p-5" onSubmit={handleCreateUser}>
+        <div className="pointer-events-none chroma-grid" />
+        <div className="relative z-10 space-y-1">
           <h2 className="text-lg font-bold text-slate-900 sm:text-xl">Create new user</h2>
-          <p className="text-sm font-medium text-slate-500">Add a new account and assign access later.</p>
+          <p className="text-sm font-medium text-slate-600">Add a new account and assign access later.</p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="relative z-10 grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-2 text-xs font-semibold text-slate-500 sm:text-sm">
             <span>Username</span>
             <input
@@ -408,7 +409,7 @@ const UserManagementPanel = ({ onUsersChanged }) => {
               value={newUser.username}
               onChange={(event) => setNewUser((state) => ({ ...state, username: event.target.value }))}
               placeholder="Unique username"
-              className="w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-inner shadow-slate-900/5 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+              className="w-full rounded-2xl border border-white/35 bg-white/40 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
             />
           </label>
           <label className="flex flex-col gap-2 text-xs font-semibold text-slate-500 sm:text-sm">
@@ -418,7 +419,7 @@ const UserManagementPanel = ({ onUsersChanged }) => {
               value={newUser.password}
               onChange={(event) => setNewUser((state) => ({ ...state, password: event.target.value }))}
               placeholder="Temporary password"
-              className="w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-inner shadow-slate-900/5 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+              className="w-full rounded-2xl border border-white/35 bg-white/40 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
             />
           </label>
           <label className="flex flex-col gap-2 text-xs font-semibold text-slate-500 sm:text-sm sm:col-span-2">
@@ -426,17 +427,17 @@ const UserManagementPanel = ({ onUsersChanged }) => {
             <select
               value={newUser.role}
               onChange={(event) => setNewUser((state) => ({ ...state, role: event.target.value }))}
-              className="w-full appearance-none rounded-2xl border border-slate-200 bg-white/80 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-inner shadow-slate-900/5 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+              className="w-full appearance-none rounded-2xl border border-white/35 bg-white/40 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
             >
               <option value="user">User</option>
               <option value="admin">Admin</option>
             </select>
           </label>
         </div>
-        <div className="flex justify-end">
+        <div className="relative z-10 flex justify-end">
           <button
             type="submit"
-            className="inline-flex items-center justify-center rounded-full bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_20px_45px_-24px_rgba(79,70,229,0.85)] transition hover:shadow-[0_25px_55px_-22px_rgba(79,70,229,0.9)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={creating}
           >
             {creating ? 'Creating…' : 'Create user'}

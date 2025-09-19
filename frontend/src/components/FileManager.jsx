@@ -539,70 +539,86 @@ const FileManager = ({
   const quickLookDownloadHandler = quickLook.item ? () => handleDownload(quickLook.item) : undefined;
 
   return (
-    <div className="flex h-full flex-col gap-5 rounded-2xl border border-white/55 bg-white/88 p-5 shadow-xl shadow-blue-500/10 backdrop-blur-lg">
-      <header className="space-y-1">
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
-        {subtitle ? <p className="text-sm font-medium text-slate-500 sm:text-base">{subtitle}</p> : null}
-      </header>
-
-      <Toolbar
-        currentPath={currentPath}
-        onCreateFolder={handleCreateFolder}
-        onUpload={handleUpload}
-        onRefresh={refresh}
-        onNavigateUp={handleNavigateUp}
-        canNavigateUp={canNavigateUp}
-        onQuickLook={() => handleQuickLook()}
-        canQuickLook={canQuickLook}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        allowCreate={allowCreate}
-        allowUpload={allowUpload}
-        allowQuickLook={allowQuickLook}
-        allowViewToggle={allowViewToggle}
+    <div className="glass-panel relative flex h-full flex-col gap-6 overflow-hidden p-5">
+      <div className="pointer-events-none chroma-grid" />
+      <div
+        className="orb-glow"
+        style={{
+          bottom: '-32%',
+          right: '-24%',
+          width: '360px',
+          height: '360px',
+          background: 'radial-gradient(circle, rgba(79,70,229,0.38), transparent 65%)',
+        }}
       />
+      <div className="relative z-10 flex flex-col gap-6">
+        <header className="space-y-2">
+          <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em] text-blue-600">
+            File Explorer
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
+          {subtitle ? <p className="text-sm font-medium text-slate-600 sm:text-base">{subtitle}</p> : null}
+        </header>
 
-      <Breadcrumbs breadcrumbs={breadcrumbs} onNavigate={handleNavigate} />
-
-      {error && (
-        <div
-          className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-600 shadow-sm"
-          role="alert"
-        >
-          {error}
-        </div>
-      )}
-      {message && (
-        <div
-          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-600 shadow-sm"
-          role="status"
-        >
-          {message}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed border-blue-200 bg-blue-50/70 text-sm font-semibold text-blue-600">
-          Loading…
-        </div>
-      ) : (
-        <FileList
-          items={items}
+        <Toolbar
+          currentPath={currentPath}
+          onCreateFolder={handleCreateFolder}
+          onUpload={handleUpload}
+          onRefresh={refresh}
+          onNavigateUp={handleNavigateUp}
+          canNavigateUp={canNavigateUp}
+          onQuickLook={() => handleQuickLook()}
+          canQuickLook={canQuickLook}
           viewMode={viewMode}
-          selectedItem={selectedItem}
-          onSelect={handleSelectItem}
-          onOpen={handleOpen}
-          onQuickLook={handleQuickLook}
-          onRename={handleRename}
-          onDelete={handleDelete}
-          onToggleLock={handleToggleLock}
-          onDownload={handleDownload}
-          allowRename={allowRename}
-          allowDelete={allowDelete}
-          allowLockToggle={allowLockToggle}
+          onViewModeChange={setViewMode}
+          allowCreate={allowCreate}
+          allowUpload={allowUpload}
           allowQuickLook={allowQuickLook}
+          allowViewToggle={allowViewToggle}
         />
-      )}
+
+        <Breadcrumbs breadcrumbs={breadcrumbs} onNavigate={handleNavigate} />
+
+        {error && (
+          <div
+            className="rounded-2xl border border-rose-200/70 bg-rose-100/80 px-4 py-3 text-sm font-semibold text-rose-600 shadow-[0_12px_30px_-18px_rgba(244,63,94,0.45)]"
+            role="alert"
+          >
+            {error}
+          </div>
+        )}
+        {message && (
+          <div
+            className="rounded-2xl border border-emerald-200/70 bg-emerald-100/75 px-4 py-3 text-sm font-semibold text-emerald-600 shadow-[0_12px_30px_-18px_rgba(16,185,129,0.4)]"
+            role="status"
+          >
+            {message}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex min-h-[240px] items-center justify-center rounded-2xl border border-white/25 bg-white/30 text-sm font-semibold text-blue-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
+            Loading…
+          </div>
+        ) : (
+          <FileList
+            items={items}
+            viewMode={viewMode}
+            selectedItem={selectedItem}
+            onSelect={handleSelectItem}
+            onOpen={handleOpen}
+            onQuickLook={handleQuickLook}
+            onRename={handleRename}
+            onDelete={handleDelete}
+            onToggleLock={handleToggleLock}
+            onDownload={handleDownload}
+            allowRename={allowRename}
+            allowDelete={allowDelete}
+            allowLockToggle={allowLockToggle}
+            allowQuickLook={allowQuickLook}
+          />
+        )}
+      </div>
 
       <QuickLook
         isOpen={quickLook.open}

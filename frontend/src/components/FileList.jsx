@@ -64,13 +64,20 @@ const FileList = ({
 }) => {
   if (!items || items.length === 0) {
     return (
-      <div className="flex min-h-[180px] items-center justify-center rounded-2xl border border-dashed border-blue-200 bg-blue-50/60 text-sm font-semibold text-blue-600">
+      <div className="flex min-h-[180px] items-center justify-center rounded-2xl border border-white/30 bg-white/30 text-sm font-semibold text-blue-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
         This folder is empty.
       </div>
     );
   }
 
   const selectedPath = selectedItem?.path;
+
+  const primaryButtonClass =
+    'inline-flex items-center gap-1 rounded-full border border-white/25 bg-white/30 px-3 py-1 text-xs font-semibold text-blue-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition hover:border-blue-300 hover:bg-white/45';
+  const secondaryButtonClass =
+    'inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/25 px-3 py-1 text-xs font-semibold text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition hover:border-white/35 hover:bg-white/35';
+  const dangerButtonClass =
+    'inline-flex items-center gap-1 rounded-full border border-rose-200/70 bg-rose-100/70 px-3 py-1 text-xs font-semibold text-rose-600 shadow-[0_12px_30px_-20px_rgba(244,63,94,0.45)] transition hover:border-rose-300/80 hover:bg-rose-100';
 
   const renderGridView = () => (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" role="list">
@@ -85,10 +92,10 @@ const FileList = ({
             key={item.path || item.name}
             role="listitem"
             tabIndex={0}
-            className={`group flex cursor-pointer flex-col gap-3 rounded-2xl border px-4 py-4 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+            className={`group relative flex cursor-pointer flex-col gap-3 overflow-hidden rounded-2xl border px-4 py-4 text-left shadow-[0_24px_48px_-32px_rgba(15,23,42,0.45)] transition duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
               isSelected
-                ? 'border-blue-300 bg-blue-50/70 shadow-lg shadow-blue-300/40'
-                : 'border-white/60 bg-white/85 hover:border-blue-200 hover:bg-blue-50/60'
+                ? 'border-blue-400/70 bg-gradient-to-br from-blue-500/25 via-blue-500/10 to-purple-400/10 text-blue-900 ring-1 ring-blue-300/60'
+                : 'border-white/30 bg-white/45 text-slate-800 hover:-translate-y-1 hover:border-blue-300/60 hover:bg-white/55'
             }`}
             onClick={(event) => {
               event.preventDefault();
@@ -116,10 +123,10 @@ const FileList = ({
               }
             }}
           >
-            <div className="text-3xl text-slate-800" aria-hidden="true">
+            <div className={`text-3xl ${isSelected ? 'text-blue-700' : 'text-slate-700'}`} aria-hidden="true">
               {glyph}
             </div>
-            <div className="text-base font-semibold text-slate-900" title={item.name}>
+            <div className={`text-base font-semibold ${isSelected ? 'text-blue-900' : 'text-slate-900'}`} title={item.name}>
               {item.name}
             </div>
             <div className="text-xs font-medium text-slate-500" title={modified}>
@@ -129,7 +136,7 @@ const FileList = ({
               {isDirectory ? (
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-100"
+                  className={primaryButtonClass}
                   onClick={(event) => {
                     event.stopPropagation();
                     onOpen(item);
@@ -142,7 +149,7 @@ const FileList = ({
                   {allowQuickLook && (
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-100"
+                      className={primaryButtonClass}
                       onClick={(event) => {
                         event.stopPropagation();
                         onSelect(item);
@@ -154,7 +161,7 @@ const FileList = ({
                   )}
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-100"
+                    className={primaryButtonClass}
                     onClick={(event) => {
                       event.stopPropagation();
                       onSelect(item);
@@ -168,7 +175,7 @@ const FileList = ({
               {allowRename && (
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300"
+                  className={secondaryButtonClass}
                   onClick={(event) => {
                     event.stopPropagation();
                     onSelect(item);
@@ -181,7 +188,7 @@ const FileList = ({
               {allowDelete && (
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-100"
+                  className={dangerButtonClass}
                   onClick={(event) => {
                     event.stopPropagation();
                     onSelect(item);
@@ -194,7 +201,7 @@ const FileList = ({
               {allowLockToggle && (
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300"
+                  className={secondaryButtonClass}
                   onClick={(event) => {
                     event.stopPropagation();
                     onSelect(item);
@@ -212,9 +219,9 @@ const FileList = ({
   );
 
   const renderListView = () => (
-    <div className="overflow-hidden rounded-2xl border border-white/60 bg-white/90 shadow-sm">
-      <table className="min-w-full divide-y divide-slate-200/70 text-sm">
-        <thead className="bg-slate-50/80 text-xs font-semibold uppercase tracking-wide text-slate-500">
+    <div className="overflow-hidden rounded-2xl border border-white/30 bg-white/45 shadow-[0_24px_48px_-32px_rgba(15,23,42,0.45)]">
+      <table className="min-w-full divide-y divide-white/30 text-sm">
+        <thead className="bg-white/40 text-xs font-semibold uppercase tracking-wide text-slate-500">
           <tr>
             <th className="px-4 py-3 text-left">Name</th>
             <th className="px-4 py-3 text-left">Type</th>
@@ -224,7 +231,7 @@ const FileList = ({
             <th className="px-4 py-3 text-right">Actions</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-white/20">
           {items.map((item) => {
             const isDirectory = item.type === 'directory';
             const icon = getFileGlyph(item);
@@ -238,8 +245,8 @@ const FileList = ({
                 tabIndex={0}
                 className={
                   isSelected
-                    ? 'bg-blue-50/70 text-blue-700 transition'
-                    : 'transition hover:bg-slate-50/80'
+                    ? 'bg-gradient-to-r from-blue-500/15 via-blue-500/5 to-purple-400/10 text-blue-800 transition'
+                    : 'transition hover:bg-white/40'
                 }
                 onClick={() => {
                   onSelect(item);
@@ -288,36 +295,36 @@ const FileList = ({
                   {isDirectory ? (
                     <button
                       type="button"
-                    className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onSelect(item);
+                      className={primaryButtonClass}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onSelect(item);
                         onOpen(item);
                       }}
                   >
                     Open
                   </button>
-                ) : (
-                  <>
-                    {allowQuickLook && (
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onSelect(item);
+                  ) : (
+                    <>
+                      {allowQuickLook && (
+                        <button
+                          type="button"
+                          className={primaryButtonClass}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onSelect(item);
                           onQuickLook(item);
                         }}
                       >
                         Quick Look
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onSelect(item);
+                      )}
+                      <button
+                        type="button"
+                        className={primaryButtonClass}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onSelect(item);
                         onDownload(item);
                       }}
                     >
@@ -328,7 +335,7 @@ const FileList = ({
                 {allowRename && (
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                    className={secondaryButtonClass}
                     onClick={(event) => {
                       event.stopPropagation();
                       onSelect(item);
@@ -341,7 +348,7 @@ const FileList = ({
                 {allowDelete && (
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500"
+                    className={dangerButtonClass}
                     onClick={(event) => {
                       event.stopPropagation();
                       onSelect(item);
@@ -354,7 +361,7 @@ const FileList = ({
                 {allowLockToggle && (
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                    className={secondaryButtonClass}
                     onClick={(event) => {
                       event.stopPropagation();
                       onSelect(item);
