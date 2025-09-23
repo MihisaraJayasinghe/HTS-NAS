@@ -33,6 +33,30 @@
       ],
       "createdAt": "2025-09-17T09:36:14.982Z",
       "updatedAt": "2025-09-17T09:38:36.760Z"
+    },
+    "Finance": {
+      "username": "Finance",
+      "role": "finance",
+      "passwordHash": "$2a$10$hvTX0yJRtyTvmc6iAsDeDuEbteYrvXoDpVF3UJbQTXws9YeJAbGhy",
+      "access": [],
+      "createdAt": "2025-09-23T06:05:03.819Z",
+      "updatedAt": "2025-09-23T06:05:03.819Z"
+    },
+    "Procurement": {
+      "username": "Procurement",
+      "role": "procurement",
+      "passwordHash": "$2a$10$57hDS05A8uGDubRclmPSF.8My29LO7Cmh0A6ZctdmLswE3j7urq6K",
+      "access": [],
+      "createdAt": "2025-09-23T06:05:03.899Z",
+      "updatedAt": "2025-09-23T06:05:03.899Z"
+    },
+    "DepartmentHead": {
+      "username": "DepartmentHead",
+      "role": "dept-head",
+      "passwordHash": "$2a$10$uPqIwF2WmtLqhH6fYwNgc.j8HIiE8vq0RHLQPcjsXOwN2w1s0YAQ.",
+      "access": [],
+      "createdAt": "2025-09-23T06:05:03.970Z",
+      "updatedAt": "2025-09-23T06:05:03.970Z"
     }
   }
 }

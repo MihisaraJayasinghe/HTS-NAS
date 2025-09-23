@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import AdminDashboard from './components/AdminDashboard.jsx';
 import UserDashboard from './components/UserDashboard.jsx';
+import DepartmentHeadDashboard from './components/DepartmentHeadDashboard.jsx';
+import FinanceDashboard from './components/FinanceDashboard.jsx';
+import ProcurementDashboard from './components/ProcurementDashboard.jsx';
 import LoginForm from './components/LoginForm.jsx';
 import {
   setAuthToken,
@@ -202,7 +205,7 @@ const App = () => {
   const { user } = authState;
   if (user.role === 'admin') {
     return renderShell({
-      user,
+    user,
       content: (
         <AdminDashboard
           user={user}
@@ -213,15 +216,30 @@ const App = () => {
     });
   }
 
+  if (user.role === 'dept-head') {
+    return renderShell({
+      user,
+      content: <DepartmentHeadDashboard user={user} onPasswordChange={handlePasswordChange} />,
+    });
+  }
+
+  if (user.role === 'finance') {
+    return renderShell({
+      user,
+      content: <FinanceDashboard user={user} onPasswordChange={handlePasswordChange} />,
+    });
+  }
+
+  if (user.role === 'procurement') {
+    return renderShell({
+      user,
+      content: <ProcurementDashboard user={user} onPasswordChange={handlePasswordChange} />,
+    });
+  }
+
   return renderShell({
     user,
-    content: (
-      <UserDashboard
-        user={user}
-        onPasswordChange={handlePasswordChange}
-        onRefreshUser={refreshUser}
-      />
-    ),
+    content: <UserDashboard user={user} onPasswordChange={handlePasswordChange} />,
   });
 };
 

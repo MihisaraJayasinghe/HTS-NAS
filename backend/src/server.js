@@ -7,6 +7,17 @@ const fsSync = require('fs');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const morgan = require('morgan');
+const {
+  STATUS: PROCUREMENT_STATUS,
+  createProcurementRequest,
+  listProcurementRequests,
+  getProcurementRequest,
+  departmentReview,
+  financeReview,
+  procurementSelection,
+  recordReceipt,
+  receiptReview,
+} = require('./procurementWorkflow');
 
 const MIME_TYPES = {
   '.aac': 'audio/aac',
@@ -73,6 +84,8 @@ const DEFAULT_CHAT_GROUPS = [
     description: 'Chat with everyone in the workspace.',
   },
 ];
+
+const VALID_ROLES = ['admin', 'user', 'dept-head', 'finance', 'procurement'];
 
 const MAX_CHAT_MESSAGE_LENGTH = 2000;
 const MAX_NOTICE_LENGTH = 2000;
@@ -172,6 +185,34 @@ async function ensureAccountsInitialized() {
       createdAt: now,
       updatedAt: now,
     };
+    await saveAccounts(accounts);
+  }
+
+  const seededUsers = [
+    { username: 'Finance', role: 'finance' },
+    { username: 'Procurement', role: 'procurement' },
+    { username: 'DepartmentHead', role: 'dept-head' },
+  ];
+
+  let changed = false;
+  // eslint-disable-next-line no-restricted-syntax
+  for (const seed of seededUsers) {
+    if (!accounts.users[seed.username]) {
+      const now = new Date().toISOString();
+      const passwordHash = await bcrypt.hash('HTS', 10);
+      accounts.users[seed.username] = {
+        username: seed.username,
+        role: seed.role,
+        passwordHash,
+        access: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+      changed = true;
+    }
+  }
+
+  if (changed) {
     await saveAccounts(accounts);
   }
 }
@@ -529,6 +570,22 @@ function requireAdmin(req, res, next) {
   return next();
 }
 
+function requireRoles(...roles) {
+  const allowed = roles.flat().map((role) => String(role || '').toLowerCase());
+  return (req, res, next) => {
+    if (!req.account) {
+      return res.status(403).json({ message: 'Insufficient privileges' });
+    }
+    if (req.account.role === 'admin') {
+      return next();
+    }
+    if (!allowed.includes(req.account.role)) {
+      return res.status(403).json({ message: 'Insufficient privileges' });
+    }
+    return next();
+  };
+}
+
 async function loadLocks() {
   try {
     const data = await fs.readFile(LOCKS_FILE, 'utf8');
@@ -858,6 +915,153 @@ app.post(
   })
 );
 
+app.get(
+  '/api/procurement/requests',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const requests = await listProcurementRequests({
+      role: req.account.role,
+      username: req.account.username,
+    });
+    res.json({ requests });
+  })
+);
+
+app.get(
+  '/api/procurement/requests/:referenceId',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const referenceId = String(req.params.referenceId || '').trim();
+    const request = await getProcurementRequest(referenceId);
+    if (req.account.role === 'user' && request.requester !== req.account.username) {
+      return res.status(403).json({ message: 'Not authorized to view this request' });
+    }
+    res.json({ request });
+  })
+);
+
+app.post(
+  '/api/procurement/requests',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!['user', 'dept-head', 'procurement', 'finance', 'admin'].includes(req.account.role)) {
+      return res.status(403).json({ message: 'Not authorized to submit procurement requests' });
+    }
+    const request = await createProcurementRequest({
+      requester: req.account.username,
+      role: req.account.role,
+      body: req.body,
+    });
+    res.status(201).json({ request });
+  })
+);
+
+app.post(
+  '/api/procurement/requests/:referenceId/department-review',
+  requireAuth,
+  requireRoles('dept-head'),
+  asyncHandler(async (req, res) => {
+    const referenceId = String(req.params.referenceId || '').trim();
+    const decision = req.body?.decision;
+    const notes = req.body?.notes;
+    const request = await departmentReview({
+      referenceId,
+      reviewer: req.account.username,
+      role: req.account.role,
+      decision,
+      notes,
+    });
+    res.json({ request });
+  })
+);
+
+app.post(
+  '/api/procurement/requests/:referenceId/finance-review',
+  requireAuth,
+  requireRoles('finance'),
+  asyncHandler(async (req, res) => {
+    const referenceId = String(req.params.referenceId || '').trim();
+    const { decision, notes, budgetCode, invoiceNumber, paymentReference } = req.body || {};
+    const request = await financeReview({
+      referenceId,
+      reviewer: req.account.username,
+      role: req.account.role,
+      decision,
+      notes,
+      budgetCode,
+      invoiceNumber,
+      paymentReference,
+    });
+    res.json({ request });
+  })
+);
+
+app.post(
+  '/api/procurement/requests/:referenceId/procurement-selection',
+  requireAuth,
+  requireRoles('procurement'),
+  asyncHandler(async (req, res) => {
+    const referenceId = String(req.params.referenceId || '').trim();
+    const { supplier, poNumber, poDate, notes, emailLog } = req.body || {};
+    const request = await procurementSelection({
+      referenceId,
+      actor: req.account.username,
+      role: req.account.role,
+      supplier,
+      poNumber,
+      poDate,
+      notes,
+      emailLog,
+    });
+    res.json({ request });
+  })
+);
+
+app.post(
+  '/api/procurement/requests/:referenceId/receipt',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const referenceId = String(req.params.referenceId || '').trim();
+    const request = await getProcurementRequest(referenceId);
+    if (
+      req.account.role !== 'admin' &&
+      req.account.role !== 'procurement' &&
+      request.requester !== req.account.username
+    ) {
+      return res.status(403).json({ message: 'Only the requester can submit the receipt' });
+    }
+    const { reference, notes, attachments } = req.body || {};
+    const updated = await recordReceipt({
+      referenceId,
+      actor: req.account.username,
+      role: req.account.role,
+      reference,
+      notes,
+      attachments,
+    });
+    res.json({ request: updated });
+  })
+);
+
+app.post(
+  '/api/procurement/requests/:referenceId/receipt-review',
+  requireAuth,
+  requireRoles('dept-head'),
+  asyncHandler(async (req, res) => {
+    const referenceId = String(req.params.referenceId || '').trim();
+    const { decision, notes, assignee } = req.body || {};
+    const request = await receiptReview({
+      referenceId,
+      reviewer: req.account.username,
+      role: req.account.role,
+      decision,
+      notes,
+      assignee,
+    });
+    res.json({ request });
+  })
+);
+
 app.post(
   '/api/auth/login',
   asyncHandler(async (req, res) => {
@@ -984,8 +1188,10 @@ app.post(
     if (!password || password.length < 4) {
       return res.status(400).json({ message: 'Password must be at least 4 characters long' });
     }
-    if (!['admin', 'user'].includes(roleInput)) {
-      return res.status(400).json({ message: 'Role must be either "admin" or "user"' });
+    if (!VALID_ROLES.includes(roleInput)) {
+      return res
+        .status(400)
+        .json({ message: `Role must be one of: ${VALID_ROLES.join(', ')}` });
     }
 
     const accounts = await loadAccounts();
@@ -1038,8 +1244,10 @@ app.put(
 
     if (typeof req.body?.role === 'string') {
       const role = req.body.role.trim().toLowerCase();
-      if (!['admin', 'user'].includes(role)) {
-        return res.status(400).json({ message: 'Role must be either "admin" or "user"' });
+      if (!VALID_ROLES.includes(role)) {
+        return res
+          .status(400)
+          .json({ message: `Role must be one of: ${VALID_ROLES.join(', ')}` });
       }
       updates.role = role;
     }

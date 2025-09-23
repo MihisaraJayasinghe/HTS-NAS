@@ -16,10 +16,18 @@ const normalizePath = (input) => {
     .replace(/\/+$/, '');
 };
 
+const ROLE_OPTIONS = [
+  { value: 'user', label: 'User' },
+  { value: 'dept-head', label: 'Department head' },
+  { value: 'finance', label: 'Finance' },
+  { value: 'procurement', label: 'Procurement' },
+  { value: 'admin', label: 'Admin' },
+];
+
 const initialNewUser = {
   username: '',
   password: '',
-  role: 'user',
+  role: ROLE_OPTIONS[0].value,
 };
 
 const UserManagementPanel = ({ onUsersChanged }) => {
@@ -196,7 +204,7 @@ const UserManagementPanel = ({ onUsersChanged }) => {
     event.preventDefault();
     const username = newUser.username.trim();
     const password = newUser.password;
-    const role = newUser.role === 'admin' ? 'admin' : 'user';
+    const role = ROLE_OPTIONS.find((option) => option.value === newUser.role)?.value || ROLE_OPTIONS[0].value;
     setError('');
     setMessage('');
     if (!username || !password) {
@@ -303,8 +311,11 @@ const UserManagementPanel = ({ onUsersChanged }) => {
                       disabled={updatingUser || selectedUser.username === 'Admin'}
                       className="w-full appearance-none rounded-2xl border border-white/35 bg-white/40 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
                     >
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
+                      {ROLE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </label>
                 </div>
@@ -429,8 +440,11 @@ const UserManagementPanel = ({ onUsersChanged }) => {
               onChange={(event) => setNewUser((state) => ({ ...state, role: event.target.value }))}
               className="w-full appearance-none rounded-2xl border border-white/35 bg-white/40 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
             >
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
+              {ROLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
         </div>

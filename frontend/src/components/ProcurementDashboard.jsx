@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import FileManager from './FileManager.jsx';
 import AccessList from './AccessList.jsx';
-import ChangePasswordForm from './ChangePasswordForm.jsx';
+import FileManager from './FileManager.jsx';
 import ProtocolHub from './ProtocolHub.jsx';
-import NoticeBoard from './NoticeBoard.jsx';
 import ProcurementWorkspace from './ProcurementWorkspace.jsx';
 import ProcurementWindow from './ProcurementWindow.jsx';
+import NoticeBoard from './NoticeBoard.jsx';
+import ChangePasswordForm from './ChangePasswordForm.jsx';
 
 const normalizePath = (input) => {
   if (typeof input !== 'string') {
@@ -22,7 +22,7 @@ const normalizePath = (input) => {
     .replace(/\/+$/, '');
 };
 
-const UserDashboard = ({ user, onPasswordChange }) => {
+const ProcurementDashboard = ({ user, onPasswordChange }) => {
   const accessList = Array.isArray(user.access) ? user.access : [];
   const [selectedPath, setSelectedPath] = useState(accessList[0]?.path || '');
   const procurementRef = useRef(null);
@@ -57,9 +57,7 @@ const UserDashboard = ({ user, onPasswordChange }) => {
     setWindowState(payload || null);
   };
 
-  const handleWindowClose = () => {
-    setWindowState(null);
-  };
+  const handleWindowClose = () => setWindowState(null);
 
   const handleWindowSuccess = (message) => {
     procurementRef.current?.refresh();
@@ -75,21 +73,21 @@ const UserDashboard = ({ user, onPasswordChange }) => {
         <div className="pointer-events-none chroma-grid" />
         <div className="relative z-10 space-y-2">
           <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em] text-blue-600">
-            User Workspace
+            Procurement Ops
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight sm:text-[2rem]">
               Welcome, {user.username}
             </h1>
             <p className="text-sm font-medium text-slate-600 sm:text-base">
-              Browse and manage the folders shared with your account.
+              Select suppliers, raise purchase orders, and coordinate fulfilment.
             </p>
           </div>
         </div>
-        <span className="relative z-10 glass-chip text-xs tracking-[0.35em] text-blue-700">Member</span>
+        <span className="relative z-10 glass-chip text-xs tracking-[0.35em] text-blue-700">Procurement</span>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-6">
           <section>
             <AccessList access={accessList} selectedPath={selectedPath} onSelect={setSelectedPath} />
@@ -98,8 +96,8 @@ const UserDashboard = ({ user, onPasswordChange }) => {
           {hasAssignedAccess && (
             <section>
               <FileManager
-                title="Your file explorer"
-                subtitle="All changes you make stay within your assigned folders."
+                title="Shared procurement folders"
+                subtitle="Manage shared documents for procurement operations."
                 initialPath={selectedPath}
                 rootPath={selectedPath}
                 allowLockToggle={false}
@@ -131,7 +129,7 @@ const UserDashboard = ({ user, onPasswordChange }) => {
             <ChangePasswordForm title="Update your password" onSubmit={onPasswordChange} />
           </section>
         </div>
-    </div>
+      </div>
       {windowState && (
         <ProcurementWindow
           mode={windowState.type}
@@ -145,4 +143,4 @@ const UserDashboard = ({ user, onPasswordChange }) => {
   );
 };
 
-export default UserDashboard;
+export default ProcurementDashboard;

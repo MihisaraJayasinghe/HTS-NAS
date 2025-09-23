@@ -229,3 +229,53 @@ export function createNotice(message) {
     body: { message },
   });
 }
+
+export function listProcurementRequests() {
+  return request('/procurement/requests');
+}
+
+export function getProcurementRequest(referenceId) {
+  return request(`/procurement/requests/${encodeURIComponent(referenceId)}`);
+}
+
+export function createProcurementRequest(payload) {
+  return request('/procurement/requests', {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function submitDepartmentReview(referenceId, payload) {
+  return request(`/procurement/requests/${encodeURIComponent(referenceId)}/department-review`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function submitFinanceReview(referenceId, payload) {
+  return request(`/procurement/requests/${encodeURIComponent(referenceId)}/finance-review`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function submitProcurementSelection(referenceId, payload) {
+  return request(`/procurement/requests/${encodeURIComponent(referenceId)}/procurement-selection`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function submitReceipt(referenceId, payload) {
+  return request(`/procurement/requests/${encodeURIComponent(referenceId)}/receipt`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function submitReceiptReview(referenceId, payload) {
+  return request(`/procurement/requests/${encodeURIComponent(referenceId)}/receipt-review`, {
+    method: 'POST',
+    body: payload,
+  });
+}

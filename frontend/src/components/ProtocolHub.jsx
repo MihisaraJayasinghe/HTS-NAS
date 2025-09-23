@@ -2,339 +2,140 @@ import { useState } from 'react';
 
 const PROTOCOL_DEPARTMENTS = [
   {
-    id: 'people',
-    label: 'People Ops',
-    icon: '👥',
+    id: 'hiring',
+    label: 'Hiring Process',
+    icon: '🧑\u200d💼',
     accent: '#2563eb',
     accentSoft: 'rgba(37, 99, 235, 0.12)',
     accentStrong: 'rgba(37, 99, 235, 0.55)',
     border: 'rgba(37, 99, 235, 0.35)',
     heroGradient: 'linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%)',
-    tags: ['Self-serve', '24h SLA'],
-    preview: ['Leave', 'Shifts', 'Kudos'],
+    tags: ['Talent', 'Compliance'],
+    preview: ['Requisition', 'Interviews', 'Offer'],
     sections: [
       {
-        title: 'Requests',
-        icon: '📝',
+        title: 'Plan',
+        icon: '🗂️',
         items: [
-          { icon: '📝', label: 'Leave' },
-          { icon: '🕒', label: 'Shifts' },
-          { icon: '🎁', label: 'Perks' },
+          { icon: '📝', label: 'Requisition' },
+          { icon: '📣', label: 'Job Post' },
+          { icon: '🎯', label: 'Shortlist' },
         ],
       },
       {
-        title: 'Routines',
-        icon: '📋',
+        title: 'Select',
+        icon: '🎯',
         items: [
-          { icon: '🚀', label: 'Onboard' },
-          { icon: '🔄', label: 'Offboard' },
-          { icon: '🌱', label: 'Growth' },
+          { icon: '🗣️', label: 'Screen' },
+          { icon: '🤝', label: 'Interview' },
+          { icon: '🧠', label: 'Assess' },
         ],
       },
       {
-        title: 'Escalate',
-        icon: '⚡',
+        title: 'Close',
+        icon: '🤝',
         items: [
-          { icon: '🛡️', label: 'Conduct' },
-          { icon: '🤝', label: 'Disputes' },
-          { icon: '💰', label: 'Payroll' },
+          { icon: '📄', label: 'Offer' },
+          { icon: '🚀', label: 'Onboard Prep' },
+          { icon: '💬', label: 'Feedback' },
         ],
       },
     ],
   },
   {
-    id: 'it',
-    label: 'IT Desk',
-    icon: '💻',
-    accent: '#0284c7',
-    accentSoft: 'rgba(2, 132, 199, 0.14)',
-    accentStrong: 'rgba(2, 132, 199, 0.55)',
-    border: 'rgba(2, 132, 199, 0.35)',
-    heroGradient: 'linear-gradient(135deg, #0284c7 0%, #0f172a 100%)',
-    tags: ['Always on', 'Secure'],
-    preview: ['Access', 'Device', 'VPN'],
-    sections: [
-      {
-        title: 'Requests',
-        icon: '📥',
-        items: [
-          { icon: '🔑', label: 'Access' },
-          { icon: '💼', label: 'Device' },
-          { icon: '🛰️', label: 'VPN' },
-        ],
-      },
-      {
-        title: 'Routines',
-        icon: '🛠️',
-        items: [
-          { icon: '⚙️', label: 'Deploy' },
-          { icon: '🛡️', label: 'Patch' },
-          { icon: '💾', label: 'Backup' },
-        ],
-      },
-      {
-        title: 'Escalate',
-        icon: '🚨',
-        items: [
-          { icon: '🔥', label: 'Incident' },
-          { icon: '📡', label: 'Outage' },
-          { icon: '🕵️‍♂️', label: 'Security' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'finance',
-    label: 'Finance Desk',
-    icon: '💳',
+    id: 'procurement',
+    label: 'Procurement',
+    icon: '🛒',
     accent: '#1d4ed8',
     accentSoft: 'rgba(29, 78, 216, 0.12)',
     accentStrong: 'rgba(29, 78, 216, 0.5)',
     border: 'rgba(29, 78, 216, 0.32)',
     heroGradient: 'linear-gradient(135deg, #1d4ed8 0%, #312e81 100%)',
-    tags: ['Transparent', 'Tracked'],
-    preview: ['Expense', 'Purchase', 'Budget'],
+    tags: ['Spend Control', 'Traceable'],
+    preview: ['Request', 'Approval', 'Vendors'],
     sections: [
       {
-        title: 'Requests',
-        icon: '🧾',
+        title: 'Request',
+        icon: '📥',
         items: [
-          { icon: '🧾', label: 'Expense' },
-          { icon: '🛒', label: 'Purchase' },
-          { icon: '💵', label: 'Advance' },
+          { icon: '🛠️', label: 'Equipment Form', action: 'procurement:create-equipment' },
+          { icon: '💻', label: 'Software Form', action: 'procurement:create-software' },
+          { icon: '📄', label: 'Submission Guide' },
         ],
       },
       {
-        title: 'Routines',
-        icon: '🪙',
+        title: 'Evaluate',
+        icon: '📊',
         items: [
-          { icon: '🗓️', label: 'Payroll' },
-          { icon: '📨', label: 'Invoice' },
-          { icon: '📈', label: 'Budget' },
+          { icon: '🧾', label: 'Vendor Review' },
+          { icon: '🛡️', label: 'Risk Check' },
+          { icon: '📑', label: 'Compliance' },
         ],
       },
       {
-        title: 'Escalate',
-        icon: '🧭',
+        title: 'Fulfill',
+        icon: '🚚',
         items: [
-          { icon: '✅', label: 'Approvals' },
-          { icon: '📊', label: 'Limits' },
-          { icon: '🔍', label: 'Audit' },
+          { icon: '📄', label: 'PO Issued' },
+          { icon: '📦', label: 'Delivery' },
+          { icon: '💳', label: 'Payment' },
         ],
       },
     ],
   },
   {
-    id: 'facilities',
-    label: 'Facilities',
-    icon: '🏢',
-    accent: '#0369a1',
-    accentSoft: 'rgba(3, 105, 161, 0.14)',
-    accentStrong: 'rgba(3, 105, 161, 0.5)',
-    border: 'rgba(3, 105, 161, 0.32)',
-    heroGradient: 'linear-gradient(135deg, #0369a1 0%, #0f172a 100%)',
-    tags: ['Comfort', 'Ready'],
-    preview: ['Seating', 'Repair', 'Transport'],
-    sections: [
-      {
-        title: 'Requests',
-        icon: '📬',
-        items: [
-          { icon: '🪑', label: 'Seating' },
-          { icon: '🛠️', label: 'Repair' },
-          { icon: '🚌', label: 'Transport' },
-        ],
-      },
-      {
-        title: 'Routines',
-        icon: '🧹',
-        items: [
-          { icon: '☕', label: 'Pantry' },
-          { icon: '🧴', label: 'Sanitize' },
-          { icon: '📦', label: 'Inventory' },
-        ],
-      },
-      {
-        title: 'Escalate',
-        icon: '🚧',
-        items: [
-          { icon: '⚠️', label: 'Safety' },
-          { icon: '🔌', label: 'Power' },
-          { icon: '🤝', label: 'Vendor' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'quality',
-    label: 'Quality & Training',
-    icon: '🎧',
+    id: 'disciplinary',
+    label: 'Disciplinary',
+    icon: '⚖️',
     accent: '#4338ca',
     accentSoft: 'rgba(67, 56, 202, 0.14)',
     accentStrong: 'rgba(67, 56, 202, 0.55)',
     border: 'rgba(67, 56, 202, 0.32)',
     heroGradient: 'linear-gradient(135deg, #4338ca 0%, #1e1b4b 100%)',
-    tags: ['Consistent', 'Elevate'],
-    preview: ['QA', 'Coaching', 'Refresh'],
+    tags: ['Fair', 'Documented'],
+    preview: ['Concerns', 'Investigation', 'Action'],
     sections: [
       {
-        title: 'Requests',
-        icon: '🎯',
-        items: [
-          { icon: '🧪', label: 'QA' },
-          { icon: '🤝', label: 'Calibrate' },
-          { icon: '📜', label: 'Certify' },
-        ],
-      },
-      {
-        title: 'Routines',
-        icon: '📚',
-        items: [
-          { icon: '📖', label: 'Playbook' },
-          { icon: '🎓', label: 'Coaching' },
-          { icon: '🔄', label: 'Refresh' },
-        ],
-      },
-      {
-        title: 'Escalate',
-        icon: '📈',
-        items: [
-          { icon: '📉', label: 'Variance' },
-          { icon: '🗣️', label: 'Feedback' },
-          { icon: '⚙️', label: 'Rework' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'workforce',
-    label: 'Workforce',
-    icon: '📅',
-    accent: '#0f766e',
-    accentSoft: 'rgba(15, 118, 110, 0.16)',
-    accentStrong: 'rgba(15, 118, 110, 0.5)',
-    border: 'rgba(15, 118, 110, 0.3)',
-    heroGradient: 'linear-gradient(135deg, #0f766e 0%, #0f172a 100%)',
-    tags: ['Balanced', 'Realtime'],
-    preview: ['Roster', 'Forecast', 'Alerts'],
-    sections: [
-      {
-        title: 'Requests',
-        icon: '🗂️',
-        items: [
-          { icon: '📅', label: 'Roster' },
-          { icon: '🕓', label: 'Overtime' },
-          { icon: '🛎️', label: 'Swap' },
-        ],
-      },
-      {
-        title: 'Routines',
-        icon: '📊',
-        items: [
-          { icon: '📈', label: 'Forecast' },
-          { icon: '📉', label: 'Capacity' },
-          { icon: '🧠', label: 'Analytics' },
-        ],
-      },
-      {
-        title: 'Escalate',
-        icon: '⏱️',
-        items: [
-          { icon: '📣', label: 'Underfill' },
-          { icon: '🚦', label: 'Overfill' },
-          { icon: '🔔', label: 'Alerts' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'clients',
-    label: 'Client Success',
-    icon: '🤝',
-    accent: '#1e40af',
-    accentSoft: 'rgba(30, 64, 175, 0.14)',
-    accentStrong: 'rgba(30, 64, 175, 0.5)',
-    border: 'rgba(30, 64, 175, 0.32)',
-    heroGradient: 'linear-gradient(135deg, #1e40af 0%, #0b1340 100%)',
-    tags: ['Voice', 'Trusted'],
-    preview: ['Kickoff', 'SLA', 'Updates'],
-    sections: [
-      {
-        title: 'Requests',
-        icon: '📨',
-        items: [
-          { icon: '🚀', label: 'Kickoff' },
-          { icon: '⏱️', label: 'SLA' },
-          { icon: '📰', label: 'Updates' },
-        ],
-      },
-      {
-        title: 'Routines',
-        icon: '📣',
-        items: [
-          { icon: '📊', label: 'Insights' },
-          { icon: '🧭', label: 'Cadence' },
-          { icon: '💬', label: 'VOC' },
-        ],
-      },
-      {
-        title: 'Escalate',
+        title: 'Report',
         icon: '🛎️',
         items: [
-          { icon: '⚠️', label: 'Risk' },
-          { icon: '📈', label: 'Escalate' },
-          { icon: '🛡️', label: 'Recovery' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'security',
-    label: 'Security & Compliance',
-    icon: '🛡️',
-    accent: '#312e81',
-    accentSoft: 'rgba(49, 46, 129, 0.16)',
-    accentStrong: 'rgba(49, 46, 129, 0.55)',
-    border: 'rgba(49, 46, 129, 0.3)',
-    heroGradient: 'linear-gradient(135deg, #312e81 0%, #111827 100%)',
-    tags: ['Audit ready', 'Trust'],
-    preview: ['Policy', 'Access', 'Incident'],
-    sections: [
-      {
-        title: 'Requests',
-        icon: '📜',
-        items: [
-          { icon: '📜', label: 'Policy' },
-          { icon: '🔐', label: 'Access' },
-          { icon: '🗄️', label: 'Retention' },
+          { icon: '📥', label: 'Incident Intake' },
+          { icon: '🧾', label: 'Initial Review' },
+          { icon: '🧑\u200d⚖️', label: 'Support' },
         ],
       },
       {
-        title: 'Routines',
-        icon: '🛠️',
+        title: 'Investigate',
+        icon: '🔍',
         items: [
-          { icon: '🧭', label: 'Checks' },
-          { icon: '🧠', label: 'Awareness' },
-          { icon: '🛰️', label: 'Monitoring' },
+          { icon: '🧠', label: 'Fact Find' },
+          { icon: '🗣️', label: 'Interviews' },
+          { icon: '📝', label: 'Summary' },
         ],
       },
       {
-        title: 'Escalate',
-        icon: '🚨',
+        title: 'Action',
+        icon: '🛡️',
         items: [
-          { icon: '🛑', label: 'Incident' },
-          { icon: '📞', label: 'Hotline' },
-          { icon: '⚖️', label: 'Legal' },
+          { icon: '⚖️', label: 'Decision' },
+          { icon: '📣', label: 'Communication' },
+          { icon: '🔄', label: 'Follow-up' },
         ],
       },
     ],
   },
 ];
 
-const ProtocolHub = () => {
+const ProtocolHub = ({ onAction }) => {
   const [activeDepartmentId, setActiveDepartmentId] = useState('');
 
   const activeDepartment = PROTOCOL_DEPARTMENTS.find((dept) => dept.id === activeDepartmentId);
+
+  const handleItemClick = (department, section, item) => {
+    if (item?.action && typeof onAction === 'function') {
+      onAction(item.action, { department, section, item });
+    }
+  };
 
   return (
     <div className="glass-panel relative flex min-h-[520px] flex-col gap-6 overflow-hidden px-6 py-6 sm:px-7">
@@ -495,6 +296,7 @@ const ProtocolHub = () => {
                             borderColor: activeDepartment.border,
                             backgroundColor: 'rgba(255,255,255,0.96)',
                           }}
+                          onClick={() => handleItemClick(activeDepartment, section, item)}
                         >
                           <span className="text-sm" aria-hidden="true">{item.icon}</span>
                           <span>{item.label}</span>
