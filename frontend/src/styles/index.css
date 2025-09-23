@@ -6,8 +6,17 @@
   :root {
     color-scheme: light;
     font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #020617;
-    color: #0b1220;
+    /* Light theme tokens */
+    --brand-blue: #2563eb;
+    --surface: #ffffff;
+    --surface-muted: #f8fafc;
+    --border: #e5e7eb;
+    --text: #0f172a;
+    --text-muted: #475569;
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 1px rgba(15, 23, 42, 0.02);
+    --shadow-md: 0 8px 20px rgba(15, 23, 42, 0.06);
+    background-color: var(--surface-muted);
+    color: var(--text);
   }
 
   *, *::before, *::after {
@@ -17,48 +26,16 @@
   body {
     margin: 0;
     min-height: 100vh;
-    background-color: #020617;
-    background-image:
-      radial-gradient(1400px circle at 5% -20%, rgba(59, 130, 246, 0.35), transparent 60%),
-      radial-gradient(1100px circle at 95% -10%, rgba(168, 85, 247, 0.32), transparent 58%),
-      radial-gradient(1200px circle at 50% 120%, rgba(14, 165, 233, 0.24), transparent 62%),
-      linear-gradient(180deg, #020617 0%, #0f172a 45%, #020617 100%);
-    background-attachment: fixed;
-    background-size: cover;
+    background-color: var(--surface-muted);
+    background-image: none;
     position: relative;
     color: inherit;
     -webkit-font-smoothing: antialiased;
   }
 
-  body::before {
-    content: '';
-    position: fixed;
-    inset: -20%;
-    background:
-      radial-gradient(800px circle at 20% 20%, rgba(96, 165, 250, 0.18), transparent 60%),
-      radial-gradient(700px circle at 80% 12%, rgba(129, 140, 248, 0.16), transparent 60%),
-      radial-gradient(640px circle at 60% 82%, rgba(232, 121, 249, 0.12), transparent 65%);
-    filter: blur(42px);
-    opacity: 0.9;
-    z-index: -2;
-    pointer-events: none;
-    transform: translateZ(0);
-  }
+  body::before { content: none; }
 
-  body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(0deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
-    background-size: 120px 120px;
-    mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.9) 0%, transparent 70%);
-    opacity: 0.45;
-    mix-blend-mode: screen;
-    pointer-events: none;
-    z-index: -1;
-  }
+  body::after { content: none; }
 
   #root {
     min-height: 100vh;
@@ -130,57 +107,34 @@
     pointer-events: none;
   }
 
+  /* Replace glass with flat light panels */
   .glass-panel {
     position: relative;
-    border-radius: 26px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    background:
-      linear-gradient(155deg, rgba(255, 255, 255, 0.24) 0%, rgba(235, 244, 255, 0.16) 45%, rgba(78, 128, 255, 0.08) 120%),
-      rgba(255, 255, 255, 0.16);
-    box-shadow:
-      0 24px 48px -32px rgba(15, 23, 42, 0.55),
-      inset 0 1px 0 rgba(255, 255, 255, 0.14);
-    backdrop-filter: blur(24px) saturate(165%);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
     overflow: hidden;
   }
 
-  .glass-panel::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: radial-gradient(100% 140% at 20% 0%, rgba(59, 130, 246, 0.18), transparent 55%);
-    opacity: 0.6;
-    mix-blend-mode: screen;
-    pointer-events: none;
-  }
+  .glass-panel::before { content: none; }
 
-  .glass-panel::after {
-    content: '';
-    position: absolute;
-    inset: 1px;
-    border-radius: inherit;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), transparent 80%);
-    opacity: 0.35;
-    pointer-events: none;
-  }
+  .glass-panel::after { content: none; }
 
   .glass-chip {
-    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
     border-radius: 9999px;
-    padding: 0.4rem 0.95rem;
-    border: 1px solid rgba(255, 255, 255, 0.32);
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.3), rgba(148, 163, 184, 0.12));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    padding: 0.35rem 0.85rem;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
     font-weight: 600;
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: rgba(30, 64, 175, 0.9);
+    color: var(--brand-blue);
   }
 
   .glass-divider {
@@ -190,41 +144,11 @@
     opacity: 0.65;
   }
 
-  .chroma-grid {
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background-image:
-      linear-gradient(120deg, rgba(59, 130, 246, 0.16) 0%, rgba(129, 140, 248, 0.08) 45%, transparent 75%),
-      linear-gradient(0deg, rgba(255, 255, 255, 0.12) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
-    background-size:
-      100% 100%,
-      90px 90px,
-      90px 90px;
-    mix-blend-mode: screen;
-    opacity: 0.4;
-    pointer-events: none;
-  }
+  .chroma-grid { display: none; }
 
-  .chroma-grid::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: radial-gradient(circle at top, rgba(255, 255, 255, 0.35), transparent 65%);
-    opacity: 0.35;
-    pointer-events: none;
-  }
+  .chroma-grid::after { content: none; }
 
-  .orb-glow {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(40px);
-    opacity: 0.55;
-    pointer-events: none;
-    mix-blend-mode: screen;
-  }
+  .orb-glow { display: none; }
 
   .app-shell {
     position: relative;
