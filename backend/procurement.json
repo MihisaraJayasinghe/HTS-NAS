@@ -1,4 +1,169 @@
 {
-  "nextSequence": 1,
-  "requests": []
+  "nextSequence": 2,
+  "requests": [
+    {
+      "id": "PR-00001",
+      "sequence": 1,
+      "formType": "equipment",
+      "requester": "Test",
+      "requesterRole": "user",
+      "department": "IT Desk",
+      "title": "Test",
+      "description": "1212",
+      "justification": "1212",
+      "amount": 12222,
+      "currency": "USD",
+      "neededBy": "2025-09-03T00:00:00.000Z",
+      "supplierPreference": "121",
+      "attachments": [
+        "1212"
+      ],
+      "assignee": "1212",
+      "status": "completed",
+      "currentStep": "closed",
+      "departmentReview": {
+        "status": "approved",
+        "reviewer": "DepartmentHead",
+        "reviewedAt": "2025-09-23T07:12:59.520Z",
+        "notes": "approve",
+        "decision": "approved"
+      },
+      "financeReview": {
+        "status": "approved",
+        "reviewer": "Finance",
+        "reviewedAt": "2025-09-23T07:13:27.218Z",
+        "notes": "sods",
+        "budgetCode": "good",
+        "decision": "approved"
+      },
+      "procurementAction": {
+        "status": "completed",
+        "actor": "Procurement",
+        "actedAt": "2025-09-23T07:13:56.620Z",
+        "supplier": "121",
+        "poNumber": "hgbhg",
+        "poDate": "2025-09-26T00:00:00.000Z",
+        "notes": "",
+        "emailLog": ""
+      },
+      "assetReceipt": {
+        "status": "submitted",
+        "submittedBy": "Test",
+        "submittedAt": "2025-09-23T07:14:53.652Z",
+        "notes": "sdsd",
+        "reference": "sdsd",
+        "attachments": [
+          "sdsdsd"
+        ]
+      },
+      "departmentReceiptReview": {
+        "status": "approved",
+        "reviewer": "DepartmentHead",
+        "reviewedAt": "2025-09-23T07:16:11.884Z",
+        "notes": "",
+        "decision": "approved"
+      },
+      "invoiceVerification": {
+        "status": "approved",
+        "reviewer": "Finance",
+        "reviewedAt": "2025-09-23T07:16:27.921Z",
+        "notes": "sods",
+        "invoiceNumber": "sds",
+        "paymentReference": "sdsd",
+        "decision": "approved"
+      },
+      "history": [
+        {
+          "id": "b1fe58e2-3fe8-418a-a7a8-2aa25c98b952",
+          "action": "request.created",
+          "actor": "Test",
+          "role": "user",
+          "notes": "1212",
+          "details": {
+            "title": "Test",
+            "department": "IT Desk",
+            "amount": 12222,
+            "currency": "USD"
+          },
+          "timestamp": "2025-09-23T07:04:58.487Z"
+        },
+        {
+          "id": "054182c4-8a8f-4863-bdb3-f5cfcc8936f3",
+          "action": "department.review",
+          "actor": "DepartmentHead",
+          "role": "dept-head",
+          "notes": "approve",
+          "details": {
+            "decision": "approved"
+          },
+          "timestamp": "2025-09-23T07:12:59.520Z"
+        },
+        {
+          "id": "297fddc4-aea5-4f15-96f3-b509a46d5bb7",
+          "action": "finance.review",
+          "actor": "Finance",
+          "role": "finance",
+          "notes": "sods",
+          "details": {
+            "decision": "approved",
+            "stage": "budget",
+            "budgetCode": "good"
+          },
+          "timestamp": "2025-09-23T07:13:27.218Z"
+        },
+        {
+          "id": "5d438ee9-1290-49cf-b9fe-1e3d07db627b",
+          "action": "procurement.decision",
+          "actor": "Procurement",
+          "role": "procurement",
+          "notes": "",
+          "details": {
+            "supplier": "121",
+            "poNumber": "hgbhg",
+            "poDate": "2025-09-26T00:00:00.000Z"
+          },
+          "timestamp": "2025-09-23T07:13:56.620Z"
+        },
+        {
+          "id": "20ef5517-7ced-47c4-9313-1d3099a7d829",
+          "action": "receipt.submitted",
+          "actor": "Test",
+          "role": "user",
+          "notes": "sdsd",
+          "details": {
+            "reference": "sdsd"
+          },
+          "timestamp": "2025-09-23T07:14:53.652Z"
+        },
+        {
+          "id": "26ad5388-71ab-45e3-a377-4654a28e3f87",
+          "action": "receipt.review",
+          "actor": "DepartmentHead",
+          "role": "dept-head",
+          "notes": "",
+          "details": {
+            "decision": "approved",
+            "assignee": "1212"
+          },
+          "timestamp": "2025-09-23T07:16:11.884Z"
+        },
+        {
+          "id": "0d6ab4b5-a267-4ee5-a500-a3c330a1f4aa",
+          "action": "finance.review",
+          "actor": "Finance",
+          "role": "finance",
+          "notes": "sods",
+          "details": {
+            "decision": "approved",
+            "stage": "invoice",
+            "invoiceNumber": "sds",
+            "paymentReference": "sdsd"
+          },
+          "timestamp": "2025-09-23T07:16:27.921Z"
+        }
+      ],
+      "createdAt": "2025-09-23T07:04:58.486Z",
+      "updatedAt": "2025-09-23T07:16:27.921Z"
+    }
+  ]
 }
