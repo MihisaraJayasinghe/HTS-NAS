@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  frontend:
+    build: ./frontend
+    container_name: intranet_frontend
+
+  backend:
+    build: ./backend
+    container_name: intranet_backend
+
+  caddy:
+    image: caddy:latest
+    container_name: intranet_caddy
+    ports:
+      - "80:80"     # LAN access via port 80
+      - "443:443"   # (optional, for HTTPS later)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+    depends_on:
+      - frontend
+      - backend
