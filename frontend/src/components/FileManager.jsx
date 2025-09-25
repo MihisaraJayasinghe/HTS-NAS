@@ -37,6 +37,28 @@ const joinPath = (base, name) => {
   return `${sanitizedBase}/${name}`;
 };
 
+const formatBytes = (bytes) => {
+  if (!bytes || Number.isNaN(bytes)) {
+    return '0 B';
+  }
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value < 10 && unitIndex > 0 ? value.toFixed(1) : Math.round(value)} ${units[unitIndex]}`;
+};
+
+const initialUploadState = {
+  active: false,
+  percent: 0,
+  loaded: 0,
+  total: 0,
+  files: 0,
+};
+
 const initialQuickLookState = {
   open: false,
   loading: false,
@@ -79,8 +101,10 @@ const FileManager = ({
     return 'grid';
   });
   const [selectedItem, setSelectedItem] = useState(null);
+  const [uploadState, setUploadState] = useState(initialUploadState);
   const [quickLook, setQuickLook] = useState(initialQuickLookState);
   const previewUrlRef = useRef('');
+  const uploadResetTimeoutRef = useRef(null);
 
   useEffect(() => {
     setCurrentPath(startingPath);
@@ -152,6 +176,10 @@ const FileManager = ({
     () => () => {
       if (previewUrlRef.current) {
         URL.revokeObjectURL(previewUrlRef.current);
+      }
+      if (uploadResetTimeoutRef.current) {
+        clearTimeout(uploadResetTimeoutRef.current);
+        uploadResetTimeoutRef.current = null;
       }
     },
     []
@@ -252,8 +280,10 @@ const FileManager = ({
         setMessage(successMessage);
       }
       refresh();
+      return true;
     } catch (err) {
       setError(err.message || 'Something went wrong');
+      return false;
     }
   };
 
@@ -294,10 +324,57 @@ const FileManager = ({
     if (!files || files.length === 0) {
       return;
     }
-    await performAction(
-      () => uploadFiles(currentPath, files),
-      files.length === 1 ? `Uploaded “${files[0].name}”` : `Uploaded ${files.length} files`
+    if (uploadResetTimeoutRef.current) {
+      clearTimeout(uploadResetTimeoutRef.current);
+      uploadResetTimeoutRef.current = null;
+    }
+
+    const fileArray = Array.from(files);
+    const totalBytes = fileArray.reduce((sum, file) => sum + (file?.size || 0), 0);
+    setUploadState({
+      active: true,
+      percent: 0,
+      loaded: 0,
+      total: totalBytes,
+      files: fileArray.length,
+    });
+
+    const success = await performAction(
+      () =>
+        uploadFiles(currentPath, fileArray, {
+          onProgress: ({ loaded, total, percent }) => {
+            setUploadState((current) => {
+              if (!current.active) {
+                return current;
+              }
+              const nextTotal = total || current.total || totalBytes;
+              const cappedPercent = Math.min(100, Math.max(0, Number.isFinite(percent) ? percent : current.percent));
+              return {
+                ...current,
+                loaded: typeof loaded === 'number' ? loaded : current.loaded,
+                total: nextTotal,
+                percent: cappedPercent,
+              };
+            });
+          },
+        }),
+      fileArray.length === 1 ? `Uploaded “${fileArray[0].name}”` : `Uploaded ${fileArray.length} files`
     );
+
+    if (success) {
+      setUploadState((current) => ({
+        ...current,
+        percent: 100,
+        loaded: current.total || totalBytes,
+      }));
+      uploadResetTimeoutRef.current = setTimeout(() => {
+        setUploadState(initialUploadState);
+        uploadResetTimeoutRef.current = null;
+      }, 750);
+      return;
+    }
+
+    setUploadState(initialUploadState);
   };
 
   const handleOpen = (item) => {
@@ -575,6 +652,7 @@ const FileManager = ({
           allowUpload={allowUpload}
           allowQuickLook={allowQuickLook}
           allowViewToggle={allowViewToggle}
+          uploadState={uploadState}
         />
 
         <Breadcrumbs breadcrumbs={breadcrumbs} onNavigate={handleNavigate} />
@@ -593,6 +671,30 @@ const FileManager = ({
             role="status"
           >
             {message}
+          </div>
+        )}
+        {uploadState.active && (
+          <div className="rounded-2xl border border-blue-200/70 bg-blue-50/80 px-4 py-3 text-sm shadow-[0_12px_30px_-20px_rgba(59,130,246,0.45)]" role="status">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-500">
+              Uploading Files
+              <span className="text-[11px] font-medium normal-case tracking-normal text-blue-500/80">
+                {uploadState.files === 1 ? '1 item' : `${uploadState.files} items`}
+              </span>
+            </div>
+            <div className="mt-1 text-sm font-semibold text-blue-600">
+              {`${Math.min(100, Math.round(uploadState.percent || 0))}% complete`}
+            </div>
+            {(uploadState.total || uploadState.loaded) && (
+              <div className="mt-0.5 text-xs font-medium text-blue-600/80">
+                {`${formatBytes(uploadState.loaded)}${uploadState.total ? ` of ${formatBytes(uploadState.total)}` : ''}`}
+              </div>
+            )}
+            <div className="mt-3 h-2 w-full rounded-full bg-white/60">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 transition-all"
+                style={{ width: `${Math.min(100, Math.max(0, uploadState.percent || 0))}%` }}
+              />
+            </div>
           </div>
         )}
 
