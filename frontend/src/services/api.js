@@ -68,16 +68,96 @@ export function createFolder(path, name) {
   });
 }
 
-export function uploadFiles(path, files) {
+export function uploadFiles(path, files, { onProgress, signal } = {}) {
   const formData = new FormData();
+  const fileArray = Array.from(files);
+  const totalBytes = fileArray.reduce((sum, file) => sum + (file?.size || 0), 0);
   formData.append('path', path || '');
-  Array.from(files).forEach((file) => {
+  fileArray.forEach((file) => {
     formData.append('files', file);
   });
 
-  return request('/upload', {
-    method: 'POST',
-    body: formData,
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const url = `${API_ROOT}/upload`;
+
+    const cleanup = () => {
+      if (signal && cleanup.abortHandler) {
+        signal.removeEventListener('abort', cleanup.abortHandler);
+      }
+    };
+
+    xhr.open('POST', url);
+
+    if (authToken) {
+      xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
+    }
+
+    if (signal) {
+      if (signal.aborted) {
+        cleanup();
+        reject(new DOMException('Upload aborted', 'AbortError'));
+        return;
+      }
+      cleanup.abortHandler = () => {
+        xhr.abort();
+      };
+      signal.addEventListener('abort', cleanup.abortHandler, { once: true });
+    }
+
+    xhr.upload.onprogress = (event) => {
+      if (!onProgress) {
+        return;
+      }
+      const total = event.lengthComputable && event.total ? event.total : totalBytes;
+      const percent = total ? Math.min(100, Math.round((event.loaded / total) * 100)) : 0;
+      onProgress({ loaded: event.loaded, total, percent });
+    };
+
+    xhr.onload = () => {
+      cleanup();
+      const { status } = xhr;
+      const responseText = xhr.responseText || '';
+      let payload = null;
+      if (responseText) {
+        try {
+          payload = JSON.parse(responseText);
+        } catch (error) {
+          // Ignore JSON parse errors – backend might return plain text.
+        }
+      }
+
+      if (status >= 200 && status < 300) {
+        if (onProgress) {
+          onProgress({ loaded: totalBytes, total: totalBytes, percent: 100 });
+        }
+        resolve(payload);
+        return;
+      }
+
+      const message = payload?.message || 'Upload failed';
+      const error = new Error(message);
+      error.status = status;
+      error.payload = payload;
+      reject(error);
+    };
+
+    xhr.onerror = () => {
+      cleanup();
+      reject(new Error('Network error while uploading files'));
+    };
+
+    xhr.onabort = () => {
+      cleanup();
+      reject(new DOMException('Upload aborted', 'AbortError'));
+    };
+
+    try {
+      xhr.send(formData);
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
   });
 }
 

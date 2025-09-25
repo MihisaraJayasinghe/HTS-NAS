@@ -15,8 +15,11 @@ const Toolbar = ({
   allowUpload = true,
   allowQuickLook = true,
   allowViewToggle = true,
+  uploadState = {},
 }) => {
   const inputRef = useRef(null);
+  const isUploading = Boolean(uploadState.active);
+  const uploadPercent = Math.min(100, Math.max(0, Math.round(uploadState.percent || 0)));
 
   const handleUploadClick = () => {
     if (!allowUpload) {
@@ -103,13 +106,26 @@ const Toolbar = ({
           </button>
         )}
         {allowUpload && (
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/25 px-4 py-2 text-sm font-semibold text-blue-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition hover:border-white/35 hover:bg-white/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-            onClick={handleUploadClick}
-          >
-            ⬆️ Upload Files
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/25 px-4 py-2 text-sm font-semibold text-blue-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition hover:border-white/35 hover:bg-white/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handleUploadClick}
+              disabled={isUploading}
+              aria-live="polite"
+            >
+              <span aria-hidden="true">⬆️</span>
+              {isUploading ? `Uploading… ${uploadPercent}%` : 'Upload Files'}
+            </button>
+            {isUploading && (
+              <div className="pointer-events-none absolute inset-x-2 bottom-1 h-[3px] overflow-hidden rounded-full bg-blue-100/70">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 transition-all"
+                  style={{ width: `${uploadPercent}%` }}
+                />
+              </div>
+            )}
+          </div>
         )}
         <button
           type="button"
