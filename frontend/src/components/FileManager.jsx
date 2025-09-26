@@ -12,6 +12,7 @@ import {
   lockItem,
   unlockItem,
   fetchFileContent,
+  subscribeToEvents,
 } from '../services/api.js';
 
 const sanitizePath = (input) => {
@@ -105,10 +106,17 @@ const FileManager = ({
   const [quickLook, setQuickLook] = useState(initialQuickLookState);
   const previewUrlRef = useRef('');
   const uploadResetTimeoutRef = useRef(null);
+  const currentPathRef = useRef(currentPath);
+  const refreshRef = useRef(() => {});
+  const updatePathRef = useRef(() => {});
 
   useEffect(() => {
     setCurrentPath(startingPath);
   }, [startingPath]);
+
+  useEffect(() => {
+    currentPathRef.current = currentPath;
+  }, [currentPath]);
 
   useEffect(() => {
     let active = true;
@@ -199,6 +207,95 @@ const FileManager = ({
     }
   }, [items, quickLook.open, quickLook.item]);
 
+  useEffect(() => {
+    const unsubscribe = subscribeToEvents((event) => {
+      if (!event || event.type !== 'items') {
+        return;
+      }
+
+      const data = event.data || {};
+      const normalizedCurrent = sanitizePath(currentPathRef.current || '');
+      const normalizedPaths = Array.isArray(data.paths)
+        ? data.paths.map((value) => sanitizePath(value || ''))
+        : [];
+      const normalizedItems = Array.isArray(data.items)
+        ? data.items.map((item) => ({
+            action: data.action,
+            name: item?.name || '',
+            type: item?.type || 'file',
+            path: sanitizePath(item?.path || ''),
+            previousPath: sanitizePath(item?.previousPath || ''),
+            parent: sanitizePath(item?.parent || ''),
+            removed: Boolean(item?.removed),
+          }))
+        : [];
+
+      let desiredPath = null;
+
+      normalizedItems.forEach((item) => {
+        if (
+          item.removed &&
+          normalizedCurrent &&
+          (normalizedCurrent === item.path || normalizedCurrent.startsWith(`${item.path}/`))
+        ) {
+          desiredPath = item.parent;
+        }
+
+        if (
+          data.action === 'item-renamed' &&
+          item.previousPath &&
+          item.path &&
+          normalizedCurrent &&
+          (normalizedCurrent === item.previousPath || normalizedCurrent.startsWith(`${item.previousPath}/`))
+        ) {
+          if (normalizedCurrent === item.previousPath) {
+            desiredPath = item.path;
+          } else {
+            const suffix = normalizedCurrent.slice(item.previousPath.length);
+            desiredPath = `${item.path}${suffix}`;
+          }
+        }
+      });
+
+      if (typeof desiredPath === 'string') {
+        const sanitizedDesired = sanitizePath(desiredPath);
+        if (sanitizedDesired !== normalizedCurrent) {
+          updatePathRef.current(sanitizedDesired);
+          return;
+        }
+        if (sanitizedDesired === normalizedCurrent) {
+          refreshRef.current();
+          return;
+        }
+      }
+
+      const shouldRefresh =
+        normalizedPaths.includes(normalizedCurrent) ||
+        normalizedItems.some((item) => {
+          const candidates = [item.path, item.previousPath].filter(Boolean);
+          return candidates.some((candidate) => {
+            if (candidate === normalizedCurrent) {
+              return true;
+            }
+            if (!candidate || !normalizedCurrent) {
+              return false;
+            }
+            return normalizedCurrent.startsWith(`${candidate}/`);
+          });
+        });
+
+      if (shouldRefresh) {
+        refreshRef.current();
+      }
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, []);
+
   const isWithinRoot = useMemo(() => {
     if (!normalizedRoot) {
       return () => true;
@@ -218,6 +315,7 @@ const FileManager = ({
   const refresh = () => {
     setRefreshToken((token) => token + 1);
   };
+  refreshRef.current = refresh;
 
   const updatePath = (path) => {
     const sanitized = sanitizePath(path);
@@ -228,6 +326,7 @@ const FileManager = ({
     setError('');
     setCurrentPath(sanitized);
   };
+  updatePathRef.current = updatePath;
 
   const handleNavigate = (path) => {
     updatePath(path || '');

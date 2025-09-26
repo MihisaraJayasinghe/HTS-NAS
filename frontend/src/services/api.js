@@ -10,13 +10,192 @@ let authToken = '';
 
 export const setAuthToken = (token) => {
   authToken = token || '';
+  restartEventStream();
 };
 
 export const getAuthToken = () => authToken;
 
 export const clearAuthToken = () => {
   authToken = '';
+  stopEventStream();
 };
+
+const eventListeners = new Set();
+let eventStreamAbortController = null;
+let eventStreamConnecting = false;
+let eventStreamReconnectTimer = null;
+let eventStreamBackoffAttempts = 0;
+
+function notifyEventListeners(event) {
+  eventListeners.forEach((listener) => {
+    try {
+      listener(event);
+    } catch (error) {
+      // Ignore listener errors to avoid breaking the stream
+    }
+  });
+}
+
+function stopEventStream() {
+  if (eventStreamReconnectTimer) {
+    clearTimeout(eventStreamReconnectTimer);
+    eventStreamReconnectTimer = null;
+  }
+  if (eventStreamAbortController) {
+    eventStreamAbortController.abort();
+    eventStreamAbortController = null;
+  }
+  eventStreamConnecting = false;
+}
+
+function scheduleEventStreamReconnect() {
+  if (!authToken || eventListeners.size === 0) {
+    return;
+  }
+  if (eventStreamReconnectTimer) {
+    return;
+  }
+  const baseDelay = 2000;
+  const delay = Math.min(30000, baseDelay * 2 ** eventStreamBackoffAttempts);
+  eventStreamReconnectTimer = setTimeout(() => {
+    eventStreamReconnectTimer = null;
+    startEventStream();
+  }, delay);
+  eventStreamBackoffAttempts += 1;
+}
+
+async function startEventStream() {
+  if (eventStreamConnecting || eventStreamAbortController || !authToken || eventListeners.size === 0) {
+    return;
+  }
+  eventStreamConnecting = true;
+  eventStreamBackoffAttempts = Math.max(eventStreamBackoffAttempts, 0);
+  notifyEventListeners({ type: 'connection', data: { state: 'connecting' } });
+
+  const controller = new AbortController();
+  eventStreamAbortController = controller;
+
+  try {
+    const response = await fetch(`${API_ROOT}/events`, {
+      method: 'GET',
+      headers: authToken
+        ? {
+            Authorization: `Bearer ${authToken}`,
+          }
+        : undefined,
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Event stream error (${response.status})`);
+    }
+
+    if (!response.body) {
+      throw new Error('Event stream not supported by this browser');
+    }
+
+    eventStreamBackoffAttempts = 0;
+    notifyEventListeners({ type: 'connection', data: { state: 'open' } });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const processBuffer = () => {
+      let separatorIndex = buffer.indexOf('\n\n');
+      while (separatorIndex !== -1) {
+        const rawEvent = buffer.slice(0, separatorIndex);
+        buffer = buffer.slice(separatorIndex + 2);
+        const trimmed = rawEvent.trim();
+        if (!trimmed || trimmed.startsWith(':')) {
+          separatorIndex = buffer.indexOf('\n\n');
+          continue;
+        }
+
+        let eventType = 'message';
+        const dataLines = [];
+        trimmed
+          .replace(/\r/g, '')
+          .split('\n')
+          .forEach((line) => {
+            if (line.startsWith('event:')) {
+              const value = line.slice(6).trim();
+              if (value) {
+                eventType = value;
+              }
+            } else if (line.startsWith('data:')) {
+              dataLines.push(line.slice(5));
+            }
+          });
+
+        const dataPayload = dataLines.join('\n').trim();
+        let parsedData = null;
+        if (dataPayload) {
+          try {
+            parsedData = JSON.parse(dataPayload);
+          } catch (error) {
+            parsedData = dataPayload;
+          }
+        }
+
+        notifyEventListeners({ type: eventType, data: parsedData });
+        separatorIndex = buffer.indexOf('\n\n');
+      }
+    };
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      processBuffer();
+    }
+
+    buffer += decoder.decode();
+    processBuffer();
+
+    notifyEventListeners({ type: 'connection', data: { state: 'closed' } });
+  } catch (error) {
+    if (!controller.signal.aborted) {
+      notifyEventListeners({
+        type: 'connection',
+        data: { state: 'error', message: error.message || 'Event stream error' },
+      });
+    }
+  } finally {
+    eventStreamConnecting = false;
+    eventStreamAbortController = null;
+    if (!authToken || eventListeners.size === 0) {
+      return;
+    }
+    scheduleEventStreamReconnect();
+  }
+}
+
+function restartEventStream() {
+  stopEventStream();
+  if (authToken && eventListeners.size > 0) {
+    startEventStream();
+  }
+}
+
+export function subscribeToEvents(listener) {
+  if (typeof listener !== 'function') {
+    throw new Error('Listener must be a function');
+  }
+  eventListeners.add(listener);
+  if (authToken) {
+    startEventStream();
+  }
+  return () => {
+    eventListeners.delete(listener);
+    if (eventListeners.size === 0) {
+      stopEventStream();
+    }
+  };
+}
 
 async function request(path, options = {}) {
   const url = `${API_ROOT}${path}`;

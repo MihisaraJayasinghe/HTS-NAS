@@ -144,6 +144,91 @@ function resolveAbsolute(input = '') {
   return { absolute: resolved, relative };
 }
 
+const realtimeClients = new Set();
+
+function cleanupRealtimeClient(client) {
+  if (!client) {
+    return;
+  }
+  if (client.heartbeat) {
+    clearInterval(client.heartbeat);
+  }
+  if (client.res && !client.res.writableEnded) {
+    try {
+      client.res.end();
+    } catch (error) {
+      // Ignore cleanup errors
+    }
+  }
+  realtimeClients.delete(client);
+}
+
+function writeSseEvent(res, eventName, payload) {
+  if (!res || res.writableEnded) {
+    return false;
+  }
+  const normalizedEvent = typeof eventName === 'string' && eventName.trim() ? eventName.trim() : undefined;
+  let dataString;
+  try {
+    dataString = JSON.stringify(payload ?? {});
+  } catch (error) {
+    dataString = JSON.stringify({ message: 'Unable to serialize event payload' });
+  }
+  const lines = [];
+  if (normalizedEvent) {
+    lines.push(`event: ${normalizedEvent}`);
+  }
+  lines.push(`data: ${dataString}`);
+  try {
+    res.write(`${lines.join('\n')}\n\n`);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function broadcastRealtimeEvent(eventName, payload) {
+  realtimeClients.forEach((client) => {
+    const success = writeSseEvent(client.res, eventName, payload);
+    if (!success) {
+      cleanupRealtimeClient(client);
+    }
+  });
+}
+
+function emitItemsChanged({ actor, action, paths = [], items = [] }) {
+  const timestamp = new Date().toISOString();
+  const normalizedPaths = Array.from(
+    new Set(
+      paths
+        .map((entry) => {
+          if (typeof entry !== 'string') {
+            return '';
+          }
+          return normalizeRelative(entry);
+        })
+        .map((entry) => entry || '')
+    )
+  );
+  const normalizedItems = items.map((item) => ({
+    name: item?.name || '',
+    type: item?.type || 'file',
+    path: item?.path ? normalizeRelative(item.path) : '',
+    previousPath: item?.previousPath ? normalizeRelative(item.previousPath) : undefined,
+    parent: item?.parent ? normalizeRelative(item.parent) : '',
+    removed: Boolean(item?.removed),
+    locked: typeof item?.locked === 'boolean' ? item.locked : undefined,
+  }));
+
+  broadcastRealtimeEvent('items', {
+    action: action || 'unknown',
+    actor: actor || 'system',
+    paths: normalizedPaths,
+    items: normalizedItems,
+    timestamp,
+  });
+}
+
 async function loadAccounts() {
   try {
     const data = await fs.readFile(ACCOUNTS_FILE, 'utf8');
@@ -536,30 +621,43 @@ function asyncHandler(handler) {
   };
 }
 
-const requireAuth = asyncHandler(async (req, res, next) => {
+async function authenticateRequest(req) {
   const header = req.get('authorization') || '';
-  const token = header.startsWith('Bearer ')
-    ? header.slice(7).trim()
-    : '';
+  let token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  if (!token && req.get('x-session-token')) {
+    token = String(req.get('x-session-token')).trim();
+  }
   if (!token) {
-    res.status(401).json({ message: 'Authentication required' });
-    return;
+    const queryToken = typeof req.query?.token === 'string' ? req.query.token.trim() : '';
+    if (queryToken) {
+      token = queryToken;
+    }
+  }
+  if (!token) {
+    return null;
   }
   const session = sessions.get(token);
   if (!session) {
-    res.status(401).json({ message: 'Invalid or expired session' });
-    return;
+    return null;
   }
   const accounts = await loadAccounts();
   const account = accounts.users[session.username];
   if (!account) {
     revokeSession(token);
-    res.status(401).json({ message: 'Account no longer exists' });
+    return null;
+  }
+  return { token, account, accounts };
+}
+
+const requireAuth = asyncHandler(async (req, res, next) => {
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    res.status(401).json({ message: 'Authentication required' });
     return;
   }
-  req.authToken = token;
-  req.account = account;
-  req.accounts = accounts;
+  req.authToken = auth.token;
+  req.account = auth.account;
+  req.accounts = auth.accounts;
   next();
 });
 
@@ -672,6 +770,55 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage });
+
+app.get(
+  '/api/events',
+  asyncHandler(async (req, res) => {
+    const auth = await authenticateRequest(req);
+    if (!auth) {
+      res.status(401).json({ message: 'Authentication required' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    if (typeof res.flushHeaders === 'function') {
+      res.flushHeaders();
+    }
+
+    res.write(': connected\n\n');
+
+    const heartbeat = setInterval(() => {
+      if (res.writableEnded) {
+        clearInterval(heartbeat);
+        return;
+      }
+      res.write(': heartbeat\n\n');
+    }, 25000);
+
+    const client = {
+      res,
+      heartbeat,
+      token: auth.token,
+      username: auth.account.username,
+    };
+
+    realtimeClients.add(client);
+
+    writeSseEvent(res, 'connected', {
+      username: auth.account.username,
+      timestamp: new Date().toISOString(),
+    });
+
+    req.on('close', () => {
+      cleanupRealtimeClient(client);
+    });
+    req.on('error', () => {
+      cleanupRealtimeClient(client);
+    });
+  })
+);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -1401,6 +1548,20 @@ app.post('/api/folders', requireAuth, async (req, res, next) => {
     ensureAccountAccess(req.account, parentRelative);
 
     await fs.mkdir(newAbsolute, { recursive: false });
+
+    emitItemsChanged({
+      actor: req.account?.username,
+      action: 'folder-created',
+      paths: [parentRelative],
+      items: [
+        {
+          name: safeName,
+          type: 'directory',
+          path: newRelative,
+          parent: parentRelative,
+        },
+      ],
+    });
     res.status(201).json({ message: 'Folder created' });
   } catch (error) {
     if (error.code === 'EEXIST') {
@@ -1447,6 +1608,26 @@ app.post('/api/upload', requireAuth, (req, res, next) => {
         });
       }
 
+      const uploadedItems = Array.isArray(req.files)
+        ? req.files
+            .filter((file) => file && typeof file.originalname === 'string')
+            .map((file) => ({
+              name: file.originalname,
+              type: 'file',
+              path: normalizeRelative(path.join(relative, file.originalname)),
+              parent: relative,
+            }))
+        : [];
+
+      if (uploadedItems.length > 0) {
+        emitItemsChanged({
+          actor: req.account?.username,
+          action: uploadedItems.length > 1 ? 'files-uploaded' : 'file-uploaded',
+          paths: [relative],
+          items: uploadedItems,
+        });
+      }
+
       res.status(201).json({ message: 'Files uploaded' });
     } catch (error) {
       next(error);
@@ -1479,6 +1660,11 @@ app.delete('/api/items', requireAuth, async (req, res, next) => {
     const { locks } = await assertUnlocked(relative, password, req.account);
 
     const stats = await fs.stat(absolute);
+    const parentRelative = relative
+      ? relative.split('/').slice(0, -1).join('/')
+      : '';
+    const itemName = path.basename(absolute);
+    const itemType = stats.isDirectory() ? 'directory' : 'file';
     if (stats.isDirectory()) {
       await fs.rm(absolute, { recursive: true, force: true });
     } else {
@@ -1487,6 +1673,21 @@ app.delete('/api/items', requireAuth, async (req, res, next) => {
 
     await deleteLocksForPath(locks, relative);
     await saveLocks(locks);
+
+    emitItemsChanged({
+      actor: req.account?.username,
+      action: 'item-deleted',
+      paths: [parentRelative],
+      items: [
+        {
+          name: itemName,
+          type: itemType,
+          path: relative,
+          parent: parentRelative,
+          removed: true,
+        },
+      ],
+    });
 
     res.json({ message: 'Item deleted' });
   } catch (error) {
@@ -1556,6 +1757,29 @@ app.put('/api/items/rename', requireAuth, async (req, res, next) => {
     });
     await saveLocks(updatedLocks);
 
+    let itemType = 'file';
+    try {
+      const renamedStats = await fs.stat(newAbsolute);
+      itemType = renamedStats.isDirectory() ? 'directory' : 'file';
+    } catch (statsError) {
+      itemType = 'file';
+    }
+
+    emitItemsChanged({
+      actor: req.account?.username,
+      action: 'item-renamed',
+      paths: [parentRelative],
+      items: [
+        {
+          name: safeName,
+          type: itemType,
+          path: newRelative,
+          previousPath: relative,
+          parent: parentRelative,
+        },
+      ],
+    });
+
     res.json({ message: 'Item renamed' });
   } catch (error) {
     if (error.code === 'EEXIST') {
@@ -1579,7 +1803,7 @@ app.post('/api/items/lock', requireAuth, requireAdmin, async (req, res, next) =>
     }
 
     const { absolute, relative } = resolveAbsolute(targetPath);
-    await fs.access(absolute);
+    const stats = await fs.stat(absolute);
     ensureAccountAccess(req.account, relative);
     const locks = await loadLocks();
     if (getLockEntry(locks, relative)) {
@@ -1589,6 +1813,27 @@ app.post('/api/items/lock', requireAuth, requireAdmin, async (req, res, next) =>
     const hash = await bcrypt.hash(password, 10);
     locks[relative] = { hash, lockedAt: new Date().toISOString() };
     await saveLocks(locks);
+
+    const parentRelative = relative
+      ? relative.split('/').slice(0, -1).join('/')
+      : '';
+    const itemName = path.basename(absolute);
+    const itemType = stats.isDirectory() ? 'directory' : 'file';
+
+    emitItemsChanged({
+      actor: req.account?.username,
+      action: 'item-locked',
+      paths: [parentRelative],
+      items: [
+        {
+          name: itemName,
+          type: itemType,
+          path: relative,
+          parent: parentRelative,
+          locked: true,
+        },
+      ],
+    });
 
     res.json({ message: 'Item locked' });
   } catch (error) {
@@ -1609,7 +1854,7 @@ app.post('/api/items/unlock', requireAuth, requireAdmin, async (req, res, next) 
       return res.status(400).json({ message: 'Password is required' });
     }
 
-    const { relative } = resolveAbsolute(targetPath);
+    const { absolute, relative } = resolveAbsolute(targetPath);
     ensureAccountAccess(req.account, relative);
     const locks = await loadLocks();
     const entry = getLockEntry(locks, relative);
@@ -1624,6 +1869,33 @@ app.post('/api/items/unlock', requireAuth, requireAdmin, async (req, res, next) 
 
     await deleteLocksForPath(locks, relative);
     await saveLocks(locks);
+
+    const parentRelative = relative
+      ? relative.split('/').slice(0, -1).join('/')
+      : '';
+    const itemName = path.basename(absolute);
+    let itemType = 'file';
+    try {
+      const stats = await fs.stat(absolute);
+      itemType = stats.isDirectory() ? 'directory' : 'file';
+    } catch (statError) {
+      itemType = 'file';
+    }
+
+    emitItemsChanged({
+      actor: req.account?.username,
+      action: 'item-unlocked',
+      paths: [parentRelative],
+      items: [
+        {
+          name: itemName,
+          type: itemType,
+          path: relative,
+          parent: parentRelative,
+          locked: false,
+        },
+      ],
+    });
 
     res.json({ message: 'Item unlocked' });
   } catch (error) {
