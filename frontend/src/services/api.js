@@ -1,4 +1,27 @@
-const rawBase = import.meta.env.VITE_API_URL || '';
+function resolveBaseUrl() {
+  if (typeof window !== 'undefined' && typeof window.__HTS_API_URL__ === 'string') {
+    return window.__HTS_API_URL__;
+  }
+
+  if (typeof process !== 'undefined' && process?.env) {
+    const candidate = process.env.NEXT_PUBLIC_API_URL || process.env.HTS_NAS_API_URL;
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  try {
+    if (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_API_URL) {
+      return import.meta.env.VITE_API_URL;
+    }
+  } catch (error) {
+    // ignore – import.meta is not available in all runtimes
+  }
+
+  return '';
+}
+
+const rawBase = resolveBaseUrl();
 const trimmedBase = rawBase.replace(/\/$/, '');
 export const API_ROOT = trimmedBase
   ? trimmedBase.endsWith('/api')
