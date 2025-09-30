@@ -7,6 +7,8 @@ const fsSync = require('fs');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const morgan = require('morgan');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 const {
   STATUS: PROCUREMENT_STATUS,
   createProcurementRequest,
@@ -60,7 +62,14 @@ function getMimeType(filename) {
 const app = express();
 const PORT = process.env.PORT || 6000;
 
-app.use(cors());
+const CORS_OPTIONS = {
+  origin: true,
+  credentials: true,
+  exposedHeaders: ['Content-Disposition', 'Content-Type', 'X-File-Name'],
+};
+
+app.use(cors(CORS_OPTIONS));
+app.options('*', cors(CORS_OPTIONS));
 app.use(express.json({ limit: '10mb' }));
 app.use(morgan('dev'));
 app.use((req, res, next) => {
@@ -91,6 +100,7 @@ const MAX_CHAT_MESSAGE_LENGTH = 2000;
 const MAX_NOTICE_LENGTH = 2000;
 
 const sessions = new Map();
+const execFileAsync = promisify(execFile);
 
 function createSession(username) {
   const token = crypto.randomBytes(48).toString('hex');
@@ -142,6 +152,92 @@ function resolveAbsolute(input = '') {
     throw new Error('Invalid path');
   }
   return { absolute: resolved, relative };
+}
+
+async function readDiskSpaceViaStatfs(rootPath) {
+  if (typeof fs.statfs !== 'function') {
+    return null;
+  }
+  try {
+    const stats = await fs.statfs(rootPath, { bigint: true });
+    const blockSizeRaw =
+      stats?.bsize ?? stats?.frsize ?? stats?.f_bsize ?? stats?.f_frsize ?? 0n;
+    const blockSize = Number(blockSizeRaw);
+    const totalBlocks = Number(stats?.blocks ?? stats?.f_blocks ?? 0n);
+    if (!blockSize || !totalBlocks || !Number.isFinite(blockSize) || !Number.isFinite(totalBlocks)) {
+      return null;
+    }
+    const availableBlocks = Number(stats?.bavail ?? stats?.f_bavail ?? 0n);
+    const freeBlocks = Number(stats?.bfree ?? stats?.f_bfree ?? availableBlocks);
+    const totalBytes = blockSize * totalBlocks;
+    const freeBytes = blockSize * availableBlocks;
+    const usedBytes = Math.max(0, totalBytes - blockSize * freeBlocks);
+    return {
+      totalBytes,
+      usedBytes,
+      freeBytes,
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+async function readDiskSpaceViaDf(rootPath) {
+  try {
+    const { stdout } = await execFileAsync('df', ['-Pk', rootPath]);
+    const lines = stdout.trim().split('\n');
+    if (lines.length < 2) {
+      return null;
+    }
+    const parts = lines[lines.length - 1].trim().split(/\s+/);
+    if (parts.length < 5) {
+      return null;
+    }
+    const totalKb = Number.parseInt(parts[1], 10);
+    const usedKb = Number.parseInt(parts[2], 10);
+    const availableKb = Number.parseInt(parts[3], 10);
+    if ([totalKb, usedKb, availableKb].some((value) => Number.isNaN(value))) {
+      return null;
+    }
+    const bytesPerKb = 1024;
+    return {
+      totalBytes: totalKb * bytesPerKb,
+      usedBytes: usedKb * bytesPerKb,
+      freeBytes: availableKb * bytesPerKb,
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+async function getStorageSnapshot() {
+  const fallbackError = new Error('Unable to determine storage capacity');
+  fallbackError.status = 500;
+  const viaStatFs = await readDiskSpaceViaStatfs(NAS_ROOT);
+  const stats = viaStatFs || (await readDiskSpaceViaDf(NAS_ROOT));
+  if (!stats) {
+    throw fallbackError;
+  }
+  const { totalBytes, usedBytes, freeBytes } = stats;
+  const safeTotal = Number.isFinite(totalBytes) && totalBytes > 0 ? totalBytes : 0;
+  const safeFree = Number.isFinite(freeBytes) && freeBytes >= 0 ? freeBytes : 0;
+  const freeClamped = Math.min(Math.max(safeFree, 0), safeTotal);
+  const derivedUsed = safeTotal ? Math.min(Math.max(safeTotal - freeClamped, 0), safeTotal) : 0;
+  const safeUsed = Number.isFinite(usedBytes) && usedBytes >= 0 ? usedBytes : derivedUsed;
+  const usedClamped = Math.min(Math.max(safeUsed || derivedUsed, 0), safeTotal);
+  const denominator = safeTotal || (usedClamped + freeClamped) || 1;
+  const usedPercentage = Number(((usedClamped / denominator) * 100).toFixed(2));
+  const freePercentage = Number(((freeClamped / denominator) * 100).toFixed(2));
+
+  return {
+    totalBytes: safeTotal,
+    usedBytes: usedClamped,
+    freeBytes: freeClamped,
+    usedPercentage: Number.isFinite(usedPercentage) ? usedPercentage : 0,
+    freePercentage: Number.isFinite(freePercentage) ? freePercentage : 0,
+    path: NAS_ROOT,
+    timestamp: new Date().toISOString(),
+  };
 }
 
 const realtimeClients = new Set();
@@ -823,6 +919,15 @@ app.get(
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
+
+app.get(
+  '/api/storage/status',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const snapshot = await getStorageSnapshot();
+    res.json(snapshot);
+  })
+);
 
 app.get(
   '/api/chat/roster',

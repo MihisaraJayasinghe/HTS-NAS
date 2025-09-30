@@ -5,6 +5,7 @@ import DepartmentHeadDashboard from './components/DepartmentHeadDashboard.jsx';
 import FinanceDashboard from './components/FinanceDashboard.jsx';
 import ProcurementDashboard from './components/ProcurementDashboard.jsx';
 import LoginForm from './components/LoginForm.jsx';
+import StorageIndicator from './components/StorageIndicator.jsx';
 import {
   setAuthToken,
   login as apiLogin,
@@ -134,6 +135,7 @@ const App = () => {
             </div>
             {user ? (
               <div className="app-topbar__meta">
+                <StorageIndicator />
                 <div className="app-topbar__user">
                   <span>{user.username}</span>
                   <span className="app-topbar__chip">{user.role}</span>
