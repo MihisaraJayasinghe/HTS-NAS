@@ -3,19 +3,19 @@ function resolveBaseUrl() {
     return window.__HTS_API_URL__;
   }
 
+  if (typeof process !== 'undefined' && process?.env) {
+    const candidate = process.env.NEXT_PUBLIC_API_URL || process.env.HTS_NAS_API_URL;
+    if (candidate) {
+      return candidate;
+    }
+  }
+
   try {
     if (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_API_URL) {
       return import.meta.env.VITE_API_URL;
     }
   } catch (error) {
     // ignore – import.meta is not available in all runtimes
-  }
-
-  if (typeof process !== 'undefined' && process?.env) {
-    const candidate = process.env.NEXT_PUBLIC_API_URL || process.env.HTS_NAS_API_URL;
-    if (candidate) {
-      return candidate;
-    }
   }
 
   return '';
