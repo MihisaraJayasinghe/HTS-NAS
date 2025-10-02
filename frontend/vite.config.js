@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
         },
       },
-      allowedHosts: ['localhost', '127.0.0.1', 'mjay.local', 'HTSs-Mac-mini.local', 'htss-mac-mini.local'],
+      allowedHosts: ['localhost', '127.0.0.1', 'mjay.local', 'HTSs-Mac-mini.local', 'htss-mac-mini.local' ,'htsnas.local'],
     },
     preview: {
       port: 4173,
