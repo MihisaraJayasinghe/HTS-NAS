@@ -1897,6 +1897,201 @@ app.put('/api/items/rename', requireAuth, async (req, res, next) => {
   }
 });
 
+app.post('/api/items/copy', requireAuth, async (req, res, next) => {
+  try {
+    const { source, destination = '', newName, password } = req.body || {};
+    if (!source || typeof source !== 'string') {
+      return res.status(400).json({ message: 'Source path is required' });
+    }
+
+    const { absolute: sourceAbsolute, relative: sourceRelative } = resolveAbsolute(source);
+    const { absolute: destinationAbsolute, relative: destinationRelative } = resolveAbsolute(destination || '');
+    ensureAccountAccess(req.account, sourceRelative);
+    ensureAccountAccess(req.account, destinationRelative);
+
+    const sourceStats = await fs.stat(sourceAbsolute);
+    const destinationStats = await fs.stat(destinationAbsolute);
+    if (!destinationStats.isDirectory()) {
+      return res.status(400).json({ message: 'Destination must be a folder' });
+    }
+
+    const baseName = typeof newName === 'string' && newName.trim() ? newName.trim() : path.basename(sourceAbsolute);
+    if (!baseName) {
+      return res.status(400).json({ message: 'A name is required for the copied item' });
+    }
+
+    const targetRelative = normalizeRelative(
+      `${destinationRelative ? `${destinationRelative}/` : ''}${baseName}`
+    );
+    ensureAccountAccess(req.account, targetRelative);
+    const targetAbsolute = path.join(NAS_ROOT, targetRelative);
+
+    if (targetRelative === sourceRelative) {
+      return res.status(400).json({ message: 'Select a different destination for the copy' });
+    }
+
+    if (sourceStats.isDirectory() && targetRelative.startsWith(`${sourceRelative}/`)) {
+      return res.status(400).json({ message: 'Cannot copy a folder into itself' });
+    }
+
+    try {
+      await fs.access(targetAbsolute);
+      return res.status(409).json({ message: 'A file or folder with this name already exists in the destination' });
+    } catch (accessError) {
+      if (accessError.code !== 'ENOENT') {
+        throw accessError;
+      }
+    }
+
+    const { locks } = await assertUnlocked(sourceRelative, password, req.account);
+
+    if (sourceStats.isDirectory()) {
+      await fs.cp(sourceAbsolute, targetAbsolute, { recursive: true, errorOnExist: true });
+    } else {
+      await fs.copyFile(sourceAbsolute, targetAbsolute);
+    }
+
+    const sourcePrefix = `${sourceRelative}/`;
+    const targetPrefix = `${targetRelative}/`;
+    const lockEntries = Object.entries(locks || {}).filter(([key]) =>
+      key === sourceRelative || key.startsWith(sourcePrefix)
+    );
+    if (lockEntries.length > 0) {
+      const updatedLocks = { ...locks };
+      lockEntries.forEach(([key, value]) => {
+        const nextKey =
+          key === sourceRelative ? targetRelative : `${targetPrefix}${key.slice(sourcePrefix.length)}`;
+        updatedLocks[nextKey] = { ...value };
+      });
+      await saveLocks(updatedLocks);
+    }
+
+    const itemType = sourceStats.isDirectory() ? 'directory' : 'file';
+    emitItemsChanged({
+      actor: req.account?.username,
+      action: 'item-copied',
+      paths: [destinationRelative],
+      items: [
+        {
+          name: baseName,
+          type: itemType,
+          path: targetRelative,
+          parent: destinationRelative,
+        },
+      ],
+    });
+
+    return res.status(201).json({ message: 'Item copied' });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({ message: 'Source or destination not found' });
+    }
+    return next(error);
+  }
+});
+
+app.post('/api/items/move', requireAuth, async (req, res, next) => {
+  try {
+    const { source, destination = '', newName, password } = req.body || {};
+    if (!source || typeof source !== 'string') {
+      return res.status(400).json({ message: 'Source path is required' });
+    }
+
+    const { absolute: sourceAbsolute, relative: sourceRelative } = resolveAbsolute(source);
+    const { absolute: destinationAbsolute, relative: destinationRelative } = resolveAbsolute(destination || '');
+
+    ensureAccountAccess(req.account, sourceRelative);
+    ensureAccountAccess(req.account, destinationRelative);
+
+    if (isUserRootPath(req.account, sourceRelative)) {
+      return res.status(403).json({ message: 'You cannot move a folder that grants your access' });
+    }
+
+    const sourceStats = await fs.stat(sourceAbsolute);
+    const destinationStats = await fs.stat(destinationAbsolute);
+    if (!destinationStats.isDirectory()) {
+      return res.status(400).json({ message: 'Destination must be a folder' });
+    }
+
+    const baseName = typeof newName === 'string' && newName.trim() ? newName.trim() : path.basename(sourceAbsolute);
+    if (!baseName) {
+      return res.status(400).json({ message: 'A name is required for the moved item' });
+    }
+
+    const targetRelative = normalizeRelative(
+      `${destinationRelative ? `${destinationRelative}/` : ''}${baseName}`
+    );
+    ensureAccountAccess(req.account, targetRelative);
+    const targetAbsolute = path.join(NAS_ROOT, targetRelative);
+
+    if (targetRelative === sourceRelative) {
+      return res.json({ message: 'No changes applied' });
+    }
+
+    if (sourceStats.isDirectory() && targetRelative.startsWith(`${sourceRelative}/`)) {
+      return res.status(400).json({ message: 'Cannot move a folder into itself' });
+    }
+
+    try {
+      await fs.access(targetAbsolute);
+      return res.status(409).json({ message: 'A file or folder with this name already exists at the destination' });
+    } catch (accessError) {
+      if (accessError.code !== 'ENOENT') {
+        throw accessError;
+      }
+    }
+
+    const parentRelative = sourceRelative ? sourceRelative.split('/').slice(0, -1).join('/') : '';
+    const { locks } = await assertUnlocked(sourceRelative, password, req.account);
+
+    await fs.rename(sourceAbsolute, targetAbsolute);
+
+    const updatedLocks = {};
+    const oldPrefix = `${sourceRelative}/`;
+    const newPrefix = `${targetRelative}/`;
+    Object.keys(locks || {}).forEach((key) => {
+      if (key === sourceRelative) {
+        updatedLocks[targetRelative] = locks[key];
+      } else if (key.startsWith(oldPrefix)) {
+        updatedLocks[newPrefix + key.slice(oldPrefix.length)] = locks[key];
+      } else {
+        updatedLocks[key] = locks[key];
+      }
+    });
+    await saveLocks(updatedLocks);
+
+    let itemType = sourceStats.isDirectory() ? 'directory' : 'file';
+    try {
+      const movedStats = await fs.stat(targetAbsolute);
+      itemType = movedStats.isDirectory() ? 'directory' : 'file';
+    } catch (statsError) {
+      itemType = sourceStats.isDirectory() ? 'directory' : 'file';
+    }
+
+    emitItemsChanged({
+      actor: req.account?.username,
+      action: 'item-moved',
+      paths: [parentRelative, destinationRelative],
+      items: [
+        {
+          name: baseName,
+          type: itemType,
+          path: targetRelative,
+          previousPath: sourceRelative,
+          parent: destinationRelative,
+        },
+      ],
+    });
+
+    return res.json({ message: 'Item moved' });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({ message: 'Source or destination not found' });
+    }
+    return next(error);
+  }
+});
+
 app.post('/api/items/lock', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { path: targetPath, password } = req.body;
