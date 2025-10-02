@@ -3,10 +3,10 @@
     "Admin": {
       "username": "Admin",
       "role": "admin",
-      "passwordHash": "$2a$10$4hL7ptQIXnEKMMArDBtAXendKqCPvV4D2zKN3d5ZHk6w3AxkX1MEK",
+      "passwordHash": "$2a$10$ly5PSW6RTUXwZp4O9EdSjuNM1ExfmYL/yVVL91NCzKwfMGBs581Ga",
       "access": [],
       "createdAt": "2025-09-17T09:05:27.215Z",
-      "updatedAt": "2025-09-17T09:05:27.215Z"
+      "updatedAt": "2025-10-02T08:39:09.214Z"
     },
     "Test": {
       "username": "Test",
@@ -57,6 +57,30 @@
       "access": [],
       "createdAt": "2025-09-23T06:05:03.970Z",
       "updatedAt": "2025-09-23T06:05:03.970Z"
+    },
+    "Mihisara": {
+      "username": "Mihisara",
+      "role": "admin",
+      "passwordHash": "$2a$10$g6xEluMsujqbCBzZLHJuV.fYecRgJHwYyWmtequtERPJ4fDW2KCTi",
+      "access": [],
+      "createdAt": "2025-10-02T08:35:40.813Z",
+      "updatedAt": "2025-10-02T08:35:40.813Z"
+    },
+    "fann": {
+      "username": "fann",
+      "role": "admin",
+      "passwordHash": "$2a$10$HgLov.ESphrrkBCNCYKmNu1B971GvP3Vj0hx0KmFeOMAgowfrefIu",
+      "access": [],
+      "createdAt": "2025-10-02T08:36:04.145Z",
+      "updatedAt": "2025-10-02T08:36:04.145Z"
+    },
+    "chin": {
+      "username": "chin",
+      "role": "admin",
+      "passwordHash": "$2a$10$uJfUnhgRd3MAH.dFBU2K2.T.GDCIMv/RDcGCsRxQs.511W6b.SNGG",
+      "access": [],
+      "createdAt": "2025-10-02T08:36:17.857Z",
+      "updatedAt": "2025-10-02T08:36:17.857Z"
     }
   }
 }
