@@ -381,6 +381,34 @@ export function renameItem(path, newName, password) {
   });
 }
 
+export function copyItem(source, destination, { newName, password } = {}) {
+  const payload = { source, destination };
+  if (newName) {
+    payload.newName = newName;
+  }
+  if (password) {
+    payload.password = password;
+  }
+  return request('/items/copy', {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function moveItem(source, destination, { newName, password } = {}) {
+  const payload = { source, destination };
+  if (newName) {
+    payload.newName = newName;
+  }
+  if (password) {
+    payload.password = password;
+  }
+  return request('/items/move', {
+    method: 'POST',
+    body: payload,
+  });
+}
+
 export function lockItem(path, password) {
   return request('/items/lock', {
     method: 'POST',
