@@ -9,6 +9,8 @@ import {
   uploadFiles,
   deleteItem,
   renameItem,
+  copyItem,
+  moveItem,
   lockItem,
   unlockItem,
   fetchFileContent,
@@ -70,6 +72,19 @@ const initialQuickLookState = {
   item: null,
 };
 
+const initialClipboardState = {
+  mode: '',
+  item: null,
+  sourcePath: '',
+  sourceParent: '',
+};
+
+const initialDragState = {
+  item: null,
+  sourcePath: '',
+  sourceParent: '',
+};
+
 const FileManager = ({
   title = 'HTS NAS',
   subtitle = 'Browse, organize, and secure your shared storage.',
@@ -104,11 +119,19 @@ const FileManager = ({
   const [selectedItem, setSelectedItem] = useState(null);
   const [uploadState, setUploadState] = useState(initialUploadState);
   const [quickLook, setQuickLook] = useState(initialQuickLookState);
+  const [clipboard, setClipboard] = useState(initialClipboardState);
+  const [dragState, setDragState] = useState(initialDragState);
   const previewUrlRef = useRef('');
   const uploadResetTimeoutRef = useRef(null);
   const currentPathRef = useRef(currentPath);
   const refreshRef = useRef(() => {});
   const updatePathRef = useRef(() => {});
+  const clipboardRef = useRef(initialClipboardState);
+  const keyHandlerRef = useRef({
+    copy: () => {},
+    cut: () => {},
+    paste: () => {},
+  });
 
   useEffect(() => {
     setCurrentPath(startingPath);
@@ -172,11 +195,30 @@ const FileManager = ({
   }, [currentPath]);
 
   useEffect(() => {
+    clipboardRef.current = clipboard;
+  }, [clipboard]);
+
+  useEffect(() => {
     setSelectedItem((current) => {
       if (!current) {
         return current;
       }
       return items.find((item) => item.path === current.path) || null;
+    });
+  }, [items]);
+
+  useEffect(() => {
+    setClipboard((current) => {
+      if (!current?.item) {
+        return current;
+      }
+      if (current.mode === 'move') {
+        const exists = items.some((item) => item.path === current.sourcePath);
+        if (!exists) {
+          return initialClipboardState;
+        }
+      }
+      return current;
     });
   }, [items]);
 
@@ -242,7 +284,7 @@ const FileManager = ({
         }
 
         if (
-          data.action === 'item-renamed' &&
+          (data.action === 'item-renamed' || data.action === 'item-moved') &&
           item.previousPath &&
           item.path &&
           normalizedCurrent &&
@@ -397,6 +439,211 @@ const FileManager = ({
     return passwordLookup(sanitized);
   };
 
+  const resolveItemPath = (item, fallbackBase = currentPath) => {
+    if (!item) {
+      return '';
+    }
+    const rawPath = item.path || joinPath(fallbackBase, item.name);
+    return sanitizePath(rawPath);
+  };
+
+  const transferItem = async (item, destinationPath, { mode, newName } = {}) => {
+    if (!item || !mode) {
+      return false;
+    }
+    const sanitizedDestination = sanitizePath(destinationPath);
+    if (!isWithinRoot(sanitizedDestination)) {
+      setError('You can only modify items within your assigned folder.');
+      return false;
+    }
+
+    const sourcePath = resolveItemPath(item);
+    if (!sourcePath) {
+      setError('Unable to determine the selected item path.');
+      return false;
+    }
+
+    const sourceParent = sanitizePath(sourcePath.split('/').slice(0, -1).join('/'));
+
+    if (mode === 'move') {
+      if (!allowRename) {
+        setError('You do not have permission to move items.');
+        return false;
+      }
+      if (sourceParent === sanitizedDestination) {
+        setMessage('Item is already in this folder');
+        return false;
+      }
+    } else if (mode === 'copy') {
+      if (!(allowUpload || allowCreate)) {
+        setError('You do not have permission to copy items here.');
+        return false;
+      }
+    }
+
+    let password;
+    if (item.isLocked) {
+      const stored = getStoredPassword(sourcePath);
+      password = stored;
+      if (!password) {
+        const input = window.prompt(
+          `Enter the password to ${mode === 'copy' ? 'copy' : 'move'} this locked item`
+        );
+        if (!input) {
+          setMessage(`${mode === 'copy' ? 'Copy' : 'Move'} cancelled`);
+          return false;
+        }
+        password = input;
+      }
+    }
+
+    const locationLabel = sanitizedDestination === currentPath ? '' : ` to “${sanitizedDestination || 'Home'}”`;
+    const successMessage =
+      mode === 'copy'
+        ? `Copied “${item.name}”${locationLabel}`
+        : `Moved “${item.name}”${locationLabel}`;
+
+    const action =
+      mode === 'copy'
+        ? () => copyItem(sourcePath, sanitizedDestination, { newName: newName || item.name, password })
+        : () => moveItem(sourcePath, sanitizedDestination, { newName: newName || item.name, password });
+
+    return performAction(action, successMessage);
+  };
+
+  const handleCopyItem = (itemParam) => {
+    const item = itemParam || selectedItem;
+    if (!item) {
+      setError('Select an item to copy.');
+      return;
+    }
+    const sourcePath = resolveItemPath(item);
+    if (!sourcePath) {
+      setError('Unable to copy this item.');
+      return;
+    }
+    const sourceParent = sanitizePath(sourcePath.split('/').slice(0, -1).join('/'));
+    setClipboard({
+      mode: 'copy',
+      item,
+      sourcePath,
+      sourceParent,
+    });
+    setMessage(`Copied “${item.name}”. Navigate to a folder and paste.`);
+  };
+
+  const handleCutItem = (itemParam) => {
+    if (!allowRename) {
+      setError('You do not have permission to move items.');
+      return;
+    }
+    const item = itemParam || selectedItem;
+    if (!item) {
+      setError('Select an item to move.');
+      return;
+    }
+    const sourcePath = resolveItemPath(item);
+    if (!sourcePath) {
+      setError('Unable to move this item.');
+      return;
+    }
+    const sourceParent = sanitizePath(sourcePath.split('/').slice(0, -1).join('/'));
+    setClipboard({
+      mode: 'move',
+      item,
+      sourcePath,
+      sourceParent,
+    });
+    setMessage(`Ready to move “${item.name}”. Choose a destination and paste.`);
+  };
+
+  const handleClearClipboard = () => {
+    setClipboard(initialClipboardState);
+  };
+
+  const handlePasteClipboard = async (targetPath) => {
+    const currentClipboard = clipboardRef.current || clipboard;
+    if (!currentClipboard.item || !currentClipboard.mode) {
+      setError('Clipboard is empty.');
+      return;
+    }
+
+    const destination =
+      typeof targetPath === 'string'
+        ? targetPath
+        : selectedItem?.type === 'directory'
+        ? selectedItem.path
+        : currentPath;
+
+    const success = await transferItem(currentClipboard.item, destination, {
+      mode: currentClipboard.mode,
+      newName: currentClipboard.item.name,
+    });
+
+    if (success && currentClipboard.mode === 'move') {
+      handleClearClipboard();
+    }
+  };
+
+  const handleDragStartItem = (item) => {
+    const sourcePath = resolveItemPath(item);
+    const sourceParent = sanitizePath(sourcePath.split('/').slice(0, -1).join('/'));
+    setDragState({
+      item,
+      sourcePath,
+      sourceParent,
+    });
+  };
+
+  const handleDragEndItem = () => {
+    setDragState(initialDragState);
+  };
+
+  const handleDropOnItem = async (targetItem, { copy = false } = {}) => {
+    if (!targetItem || targetItem.type !== 'directory' || !dragState.item) {
+      handleDragEndItem();
+      return;
+    }
+    const destination = resolveItemPath(targetItem);
+    const shouldCopy =
+      copy || (!allowRename && (allowUpload || allowCreate));
+    const mode = shouldCopy ? 'copy' : 'move';
+    const success = await transferItem(dragState.item, destination, {
+      mode,
+      newName: dragState.item.name,
+    });
+    if (success && mode === 'move') {
+      handleClearClipboard();
+    }
+    handleDragEndItem();
+  };
+
+  const handleDropToCurrent = async ({ copy = false } = {}) => {
+    if (!dragState.item) {
+      handleDragEndItem();
+      return;
+    }
+    const shouldCopy =
+      copy || (!allowRename && (allowUpload || allowCreate));
+    const mode = shouldCopy ? 'copy' : 'move';
+    const success = await transferItem(dragState.item, currentPath, {
+      mode,
+      newName: dragState.item.name,
+    });
+    if (success && mode === 'move') {
+      handleClearClipboard();
+    }
+    handleDragEndItem();
+  };
+
+  const handleDropFiles = (files, targetItem) => {
+    if (!allowUpload) {
+      return;
+    }
+    const destination = targetItem?.type === 'directory' ? targetItem.path : currentPath;
+    handleUpload(files, destination);
+  };
+
   const handleCreateFolder = async () => {
     if (!allowCreate) {
       return;
@@ -416,11 +663,16 @@ const FileManager = ({
     );
   };
 
-  const handleUpload = async (files) => {
+  const handleUpload = async (files, targetPath = currentPath) => {
     if (!allowUpload) {
       return;
     }
     if (!files || files.length === 0) {
+      return;
+    }
+    const sanitizedTarget = sanitizePath(targetPath);
+    if (!isWithinRoot(sanitizedTarget)) {
+      setError('You can only upload within your assigned folder.');
       return;
     }
     if (uploadResetTimeoutRef.current) {
@@ -440,7 +692,7 @@ const FileManager = ({
 
     const success = await performAction(
       () =>
-        uploadFiles(currentPath, fileArray, {
+        uploadFiles(sanitizedTarget, fileArray, {
           onProgress: ({ loaded, total, percent }) => {
             setUploadState((current) => {
               if (!current.active) {
@@ -457,7 +709,12 @@ const FileManager = ({
             });
           },
         }),
-      fileArray.length === 1 ? `Uploaded “${fileArray[0].name}”` : `Uploaded ${fileArray.length} files`
+      (() => {
+        const locationLabel = sanitizedTarget === currentPath ? '' : ` to “${sanitizedTarget || 'Home'}”`;
+        return fileArray.length === 1
+          ? `Uploaded “${fileArray[0].name}”${locationLabel}`
+          : `Uploaded ${fileArray.length} files${locationLabel}`;
+      })()
     );
 
     if (success) {
@@ -701,6 +958,62 @@ const FileManager = ({
     }
   };
 
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable ||
+          target.getAttribute?.('role') === 'textbox')
+      ) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      const hasMeta = event.metaKey || event.ctrlKey;
+
+      if (hasMeta && key === 'c') {
+        event.preventDefault();
+        handleCopyItem();
+        return;
+      }
+      if (hasMeta && key === 'x') {
+        event.preventDefault();
+        handleCutItem();
+        return;
+      }
+      if (hasMeta && key === 'v') {
+        event.preventDefault();
+        handlePasteClipboard();
+        return;
+      }
+      if (key === 'delete' || key === 'backspace') {
+        if (selectedItem) {
+          event.preventDefault();
+          handleDelete(selectedItem);
+        }
+        return;
+      }
+      if (key === 'enter' && selectedItem) {
+        event.preventDefault();
+        handleOpen(selectedItem);
+        return;
+      }
+      if (key === ' ' && selectedItem?.type === 'file' && allowQuickLook) {
+        event.preventDefault();
+        handleQuickLook(selectedItem);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedItem, allowQuickLook, handleCopyItem, handleCutItem, handlePasteClipboard, handleDelete, handleOpen, handleQuickLook]);
+
   const handleOpenPreviewInNewTab = () => {
     if (!quickLook.url) {
       return;
@@ -713,6 +1026,15 @@ const FileManager = ({
 
   const canQuickLook = allowQuickLook && selectedItem?.type === 'file';
   const quickLookDownloadHandler = quickLook.item ? () => handleDownload(quickLook.item) : undefined;
+  const canHandleInternalDrops = allowRename || allowUpload || allowCreate;
+  const canCopySelected = Boolean(selectedItem);
+  const canCutSelected = Boolean(selectedItem) && allowRename;
+  const canPasteFromClipboard = Boolean(
+    clipboard.item && clipboard.mode && (clipboard.mode === 'copy' ? allowUpload || allowCreate : allowRename)
+  );
+  const clipboardLabel = clipboard.item
+    ? `${clipboard.mode === 'copy' ? 'Copying' : 'Moving'} “${clipboard.item.name}”`
+    : '';
 
   return (
     <div className="glass-panel relative flex h-full flex-col gap-6 overflow-hidden p-5">
@@ -752,6 +1074,13 @@ const FileManager = ({
           allowQuickLook={allowQuickLook}
           allowViewToggle={allowViewToggle}
           uploadState={uploadState}
+          onCopy={handleCopyItem}
+          onCut={allowRename ? handleCutItem : undefined}
+          onPaste={() => handlePasteClipboard()}
+          canCopy={canCopySelected}
+          canCut={canCutSelected}
+          canPaste={canPasteFromClipboard}
+          clipboardLabel={clipboardLabel}
         />
 
         <Breadcrumbs breadcrumbs={breadcrumbs} onNavigate={handleNavigate} />
@@ -817,6 +1146,13 @@ const FileManager = ({
             allowDelete={allowDelete}
             allowLockToggle={allowLockToggle}
             allowQuickLook={allowQuickLook}
+            onCopyItem={handleCopyItem}
+            onCutItem={allowRename ? handleCutItem : undefined}
+            onDragStart={canHandleInternalDrops ? handleDragStartItem : undefined}
+            onDragEnd={canHandleInternalDrops ? handleDragEndItem : undefined}
+            onDropItem={canHandleInternalDrops ? handleDropOnItem : undefined}
+            onDropToCurrent={canHandleInternalDrops ? handleDropToCurrent : undefined}
+            onDropFiles={allowUpload ? handleDropFiles : undefined}
           />
         )}
       </div>
