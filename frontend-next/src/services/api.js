@@ -254,6 +254,10 @@ async function request(path, options = {}) {
   return payload;
 }
 
+export function getStorageStatus() {
+  return request('/storage/status');
+}
+
 export function listItems(path = '') {
   const params = new URLSearchParams();
   if (path) {
@@ -377,6 +381,34 @@ export function renameItem(path, newName, password) {
   });
 }
 
+export function copyItem(source, destination, { newName, password } = {}) {
+  const payload = { source, destination };
+  if (newName) {
+    payload.newName = newName;
+  }
+  if (password) {
+    payload.password = password;
+  }
+  return request('/items/copy', {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function moveItem(source, destination, { newName, password } = {}) {
+  const payload = { source, destination };
+  if (newName) {
+    payload.newName = newName;
+  }
+  if (password) {
+    payload.password = password;
+  }
+  return request('/items/move', {
+    method: 'POST',
+    body: payload,
+  });
+}
+
 export function lockItem(path, password) {
   return request('/items/lock', {
     method: 'POST',
@@ -468,6 +500,13 @@ export function logout() {
 
 export function getCurrentUser() {
   return request('/auth/me');
+}
+
+export function updateMyProfile(body) {
+  return request('/users/me/profile', {
+    method: 'PUT',
+    body,
+  });
 }
 
 export function changeMyPassword(currentPassword, newPassword) {
