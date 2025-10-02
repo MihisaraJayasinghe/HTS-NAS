@@ -4,11 +4,11 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs/promises');
 const fsSync = require('fs');
-const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const morgan = require('morgan');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
+const bcrypt = require('bcryptjs');
 const {
   STATUS: PROCUREMENT_STATUS,
   createProcurementRequest,
@@ -20,6 +20,15 @@ const {
   recordReceipt,
   receiptReview,
 } = require('./procurementWorkflow');
+const {
+  loadAccounts,
+  saveAccounts,
+  ensureAccountsInitialized,
+  sanitizeUsername,
+  getAccessList,
+  toPublicUser,
+} = require('./stores/accountStore');
+const { renameAccountUsername } = require('./services/profileService');
 
 const MIME_TYPES = {
   '.aac': 'audio/aac',
@@ -81,7 +90,6 @@ const NAS_ROOT = process.env.NAS_ROOT
   ? path.resolve(process.env.NAS_ROOT)
   : path.join(__dirname, '..', '..', 'nas_storage');
 const LOCKS_FILE = path.join(__dirname, '..', 'locks.json');
-const ACCOUNTS_FILE = path.join(__dirname, '..', 'accounts.json');
 const FRONTEND_DIST = path.join(__dirname, '..', '..', 'frontend', 'dist');
 const CHAT_FILE = path.join(__dirname, '..', 'chat.json');
 const NOTICES_FILE = path.join(__dirname, '..', 'notices.json');
@@ -325,79 +333,6 @@ function emitItemsChanged({ actor, action, paths = [], items = [] }) {
   });
 }
 
-async function loadAccounts() {
-  try {
-    const data = await fs.readFile(ACCOUNTS_FILE, 'utf8');
-    const parsed = JSON.parse(data);
-    if (!parsed || typeof parsed !== 'object' || typeof parsed.users !== 'object') {
-      throw new Error('Invalid accounts file');
-    }
-    return parsed;
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      const empty = { users: {} };
-      await fs.writeFile(ACCOUNTS_FILE, JSON.stringify(empty, null, 2));
-      return empty;
-    }
-    throw error;
-  }
-}
-
-async function saveAccounts(accounts) {
-  const payload = {
-    users: accounts.users || {},
-  };
-  await fs.writeFile(ACCOUNTS_FILE, JSON.stringify(payload, null, 2));
-}
-
-async function ensureAccountsInitialized() {
-  const accounts = await loadAccounts();
-  if (!accounts.users || typeof accounts.users !== 'object') {
-    accounts.users = {};
-  }
-  if (!accounts.users.Admin) {
-    const now = new Date().toISOString();
-    const passwordHash = await bcrypt.hash('HTS', 10);
-    accounts.users.Admin = {
-      username: 'Admin',
-      role: 'admin',
-      passwordHash,
-      access: [],
-      createdAt: now,
-      updatedAt: now,
-    };
-    await saveAccounts(accounts);
-  }
-
-  const seededUsers = [
-    { username: 'Finance', role: 'finance' },
-    { username: 'Procurement', role: 'procurement' },
-    { username: 'DepartmentHead', role: 'dept-head' },
-  ];
-
-  let changed = false;
-  // eslint-disable-next-line no-restricted-syntax
-  for (const seed of seededUsers) {
-    if (!accounts.users[seed.username]) {
-      const now = new Date().toISOString();
-      const passwordHash = await bcrypt.hash('HTS', 10);
-      accounts.users[seed.username] = {
-        username: seed.username,
-        role: seed.role,
-        passwordHash,
-        access: [],
-        createdAt: now,
-        updatedAt: now,
-      };
-      changed = true;
-    }
-  }
-
-  if (changed) {
-    await saveAccounts(accounts);
-  }
-}
-
 async function loadChatData() {
   try {
     const raw = await fs.readFile(CHAT_FILE, 'utf8');
@@ -554,38 +489,6 @@ async function ensureChatDataInitialized() {
 
 async function ensureNoticesInitialized() {
   await loadNotices();
-}
-
-function sanitizeUsername(input) {
-  if (typeof input !== 'string') {
-    return '';
-  }
-  const trimmed = input.trim();
-  if (!trimmed) {
-    return '';
-  }
-  const safe = trimmed.replace(/[^A-Za-z0-9_.-]/g, '');
-  return safe;
-}
-
-function getAccessList(account) {
-  if (!account || !Array.isArray(account.access)) {
-    return [];
-  }
-  return account.access.map((entry) => ({
-    path: normalizeRelative(entry.path || ''),
-    password: String(entry.password || ''),
-  }));
-}
-
-function toPublicUser(account) {
-  return {
-    username: account.username,
-    role: account.role,
-    access: getAccessList(account),
-    createdAt: account.createdAt,
-    updatedAt: account.updatedAt,
-  };
 }
 
 function canAccessPath(account, relativePath) {
@@ -1367,6 +1270,38 @@ app.get(
       return res.status(404).json({ message: 'Account not found' });
     }
     return res.json({ user: toPublicUser(account) });
+  })
+);
+
+app.put(
+  '/api/users/me/profile',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const rawUsername = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+    const safeUsername = sanitizeUsername(rawUsername);
+
+    if (!rawUsername || safeUsername !== rawUsername) {
+      return res
+        .status(400)
+        .json({ message: 'Username may only include letters, numbers, dots, underscores, and dashes' });
+    }
+
+    const previousUsername = req.account.username;
+    if (previousUsername === safeUsername) {
+      return res.json({ user: toPublicUser(req.account) });
+    }
+
+    const { account, publicUser } = await renameAccountUsername(previousUsername, safeUsername);
+
+    Array.from(sessions.entries()).forEach(([token, session]) => {
+      if (session.username === previousUsername) {
+        sessions.set(token, { ...session, username: safeUsername });
+      }
+    });
+
+    req.account = account;
+
+    return res.json({ user: publicUser });
   })
 );
 

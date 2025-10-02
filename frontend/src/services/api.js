@@ -502,6 +502,13 @@ export function getCurrentUser() {
   return request('/auth/me');
 }
 
+export function updateMyProfile(body) {
+  return request('/users/me/profile', {
+    method: 'PUT',
+    body,
+  });
+}
+
 export function changeMyPassword(currentPassword, newPassword) {
   return request('/users/me/password', {
     method: 'PUT',
