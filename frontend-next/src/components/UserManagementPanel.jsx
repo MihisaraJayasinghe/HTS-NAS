@@ -112,16 +112,9 @@ const UserManagementPanel = ({ onUsersChanged }) => {
     }
     setError('');
     setMessage('');
-    const formatted = [];
-    const seen = new Set();
-    accessDraft.forEach((entry) => {
-      const normalized = normalizePath(entry.path || '');
-      if (seen.has(normalized)) {
-        return;
-      }
-      seen.add(normalized);
-      formatted.push({ path: normalized });
-    });
+    const formatted = accessDraft.map((entry) => ({
+      path: normalizePath(entry.path || ''),
+    }));
     setSavingAccess(true);
     try {
       await updateUser(selectedUser.username, { access: formatted });
