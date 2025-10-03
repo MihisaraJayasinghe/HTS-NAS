@@ -59,7 +59,9 @@ const UserManagementPanel = ({ onUsersChanged }) => {
       const existing = sorted.find((user) => user.username === selectedUsername);
       const activeUser = existing || sorted[0];
       setSelectedUsername(activeUser.username);
-      setAccessDraft(activeUser.access ? activeUser.access.map((entry) => ({ ...entry })) : []);
+      setAccessDraft(
+        activeUser.access ? activeUser.access.map((entry) => ({ path: entry.path || '' })) : []
+      );
     } catch (err) {
       setError(err.message || 'Unable to load users.');
       setUsers([]);
@@ -87,7 +89,7 @@ const UserManagementPanel = ({ onUsersChanged }) => {
   const handleSelectUser = (username) => {
     setSelectedUsername(username);
     const target = users.find((user) => user.username === username);
-    setAccessDraft(target?.access ? target.access.map((entry) => ({ ...entry })) : []);
+    setAccessDraft(target?.access ? target.access.map((entry) => ({ path: entry.path || '' })) : []);
   };
 
   const handleAccessChange = (index, field, value) => {
@@ -101,7 +103,7 @@ const UserManagementPanel = ({ onUsersChanged }) => {
   };
 
   const handleAddAccess = () => {
-    setAccessDraft((entries) => [...entries, { path: '', password: '' }]);
+    setAccessDraft((entries) => [...entries, { path: '' }]);
   };
 
   const handleSaveAccess = async () => {
@@ -110,14 +112,16 @@ const UserManagementPanel = ({ onUsersChanged }) => {
     }
     setError('');
     setMessage('');
-    const formatted = accessDraft.map((entry) => ({
-      path: normalizePath(entry.path || ''),
-      password: (entry.password || '').trim(),
-    }));
-    if (formatted.some((entry) => !entry.password)) {
-      setError('Every folder access must include a password.');
-      return;
-    }
+    const formatted = [];
+    const seen = new Set();
+    accessDraft.forEach((entry) => {
+      const normalized = normalizePath(entry.path || '');
+      if (seen.has(normalized)) {
+        return;
+      }
+      seen.add(normalized);
+      formatted.push({ path: normalized });
+    });
     setSavingAccess(true);
     try {
       await updateUser(selectedUser.username, { access: formatted });
@@ -360,13 +364,6 @@ const UserManagementPanel = ({ onUsersChanged }) => {
                           value={entry.path}
                           onChange={(event) => handleAccessChange(index, 'path', event.target.value)}
                           placeholder="Folder path (e.g. Projects/TeamA)"
-                          className="w-full rounded-2xl border border-white/35 bg-white/40 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
-                        />
-                        <input
-                          type="text"
-                          value={entry.password}
-                          onChange={(event) => handleAccessChange(index, 'password', event.target.value)}
-                          placeholder="Password"
                           className="w-full rounded-2xl border border-white/35 bg-white/40 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
                         />
                         <button
