@@ -1,5 +1,4 @@
-const AccessList = ({ access = [], selectedPath, onSelect, viewerRole }) => {
-  const isAdmin = String(viewerRole || '').toLowerCase() === 'admin';
+const AccessList = ({ access = [], selectedPath, onSelect }) => {
 
   if (!Array.isArray(access) || access.length === 0) {
     return (
@@ -18,17 +17,11 @@ const AccessList = ({ access = [], selectedPath, onSelect, viewerRole }) => {
       <div className="pointer-events-none chroma-grid" />
       <div className="relative z-10 space-y-1">
         <h2 className="text-lg font-bold text-slate-900">Assigned folders</h2>
-        <p className="text-sm font-medium text-slate-500">Select a folder to browse files and review any optional password.</p>
+        <p className="text-sm font-medium text-slate-500">Select a folder to browse files assigned to this account.</p>
       </div>
       <ul className="relative z-10 flex flex-col gap-3">
         {access.map((entry) => {
           const isActive = selectedPath === entry.path;
-          const hasPassword = Boolean(entry.password);
-          const passwordLabel = hasPassword
-            ? isAdmin
-              ? entry.password
-              : '••••••'
-            : 'No password required';
           return (
             <li key={entry.path || '(root)'}>
               <button
@@ -42,9 +35,6 @@ const AccessList = ({ access = [], selectedPath, onSelect, viewerRole }) => {
               >
                 <span className={`text-base font-bold ${isActive ? 'text-blue-900' : 'text-slate-900'}`}>
                   {entry.path || 'Full storage access'}
-                </span>
-                <span className={`font-mono text-xs ${isActive ? 'text-blue-700/90' : 'text-slate-500/90'}`}>
-                  Password: {passwordLabel}
                 </span>
               </button>
             </li>
