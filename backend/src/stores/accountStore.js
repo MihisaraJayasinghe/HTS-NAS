@@ -32,6 +32,22 @@ async function loadAccounts() {
     if (!parsed || typeof parsed !== 'object' || typeof parsed.users !== 'object') {
       throw new Error('Invalid accounts file');
     }
+    Object.values(parsed.users).forEach((account) => {
+      if (!account || typeof account !== 'object') {
+        return;
+      }
+      if (!Array.isArray(account.access)) {
+        account.access = [];
+        return;
+      }
+      account.access = account.access
+        .map((entry) => ({
+          path: normalizeRelative(entry?.path || ''),
+        }))
+        .filter((entry, index, array) =>
+          array.findIndex((candidate) => candidate.path === entry.path) === index
+        );
+    });
     return parsed;
   } catch (error) {
     if (error.code === 'ENOENT') {
