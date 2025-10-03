@@ -1,4 +1,6 @@
-const AccessList = ({ access = [], selectedPath, onSelect }) => {
+const AccessList = ({ access = [], selectedPath, onSelect, viewerRole }) => {
+  const isAdmin = String(viewerRole || '').toLowerCase() === 'admin';
+
   if (!Array.isArray(access) || access.length === 0) {
     return (
       <div className="glass-panel relative flex flex-col gap-4 overflow-hidden p-5">
@@ -36,7 +38,7 @@ const AccessList = ({ access = [], selectedPath, onSelect }) => {
                   {entry.path || 'Full storage access'}
                 </span>
                 <span className={`font-mono text-xs ${isActive ? 'text-blue-700/90' : 'text-slate-500/90'}`}>
-                  Password: {entry.password}
+                  Password: {isAdmin ? entry.password : '••••••'}
                 </span>
               </button>
             </li>

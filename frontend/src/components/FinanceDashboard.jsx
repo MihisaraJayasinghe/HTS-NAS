@@ -90,7 +90,12 @@ const FinanceDashboard = ({ user, onPasswordChange }) => {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-6">
           <section>
-            <AccessList access={accessList} selectedPath={selectedPath} onSelect={setSelectedPath} />
+            <AccessList
+              access={accessList}
+              selectedPath={selectedPath}
+              onSelect={setSelectedPath}
+              viewerRole={user.role}
+            />
           </section>
 
           {hasAssignedAccess && (
@@ -100,7 +105,7 @@ const FinanceDashboard = ({ user, onPasswordChange }) => {
                 subtitle="Work within the folders assigned to your finance role."
                 initialPath={selectedPath}
                 rootPath={selectedPath}
-                allowLockToggle={false}
+                allowLockToggle
                 passwordLookup={passwordLookup}
               />
             </section>
