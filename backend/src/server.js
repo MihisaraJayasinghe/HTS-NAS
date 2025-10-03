@@ -2027,7 +2027,7 @@ app.post('/api/items/move', requireAuth, async (req, res, next) => {
   }
 });
 
-app.post('/api/items/lock', requireAuth, requireAdmin, async (req, res, next) => {
+app.post('/api/items/lock', requireAuth, async (req, res, next) => {
   try {
     const { path: targetPath, password } = req.body;
     if (!targetPath || typeof targetPath !== 'string') {
@@ -2079,7 +2079,7 @@ app.post('/api/items/lock', requireAuth, requireAdmin, async (req, res, next) =>
   }
 });
 
-app.post('/api/items/unlock', requireAuth, requireAdmin, async (req, res, next) => {
+app.post('/api/items/unlock', requireAuth, async (req, res, next) => {
   try {
     const { path: targetPath, password } = req.body;
     if (!targetPath || typeof targetPath !== 'string') {

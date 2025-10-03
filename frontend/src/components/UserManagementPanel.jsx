@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import useDialog from './dialog/useDialog.js';
 import { fetchUsers, createUser, updateUser, deleteUser } from '../services/api.js';
+import FolderPickerDialog from './FolderPickerDialog.jsx';
 
 const normalizePath = (input) => {
   if (typeof input !== 'string') {
@@ -43,6 +44,7 @@ const UserManagementPanel = ({ onUsersChanged }) => {
   const [newUser, setNewUser] = useState(initialNewUser);
   const [savingAccess, setSavingAccess] = useState(false);
   const [updatingUser, setUpdatingUser] = useState(false);
+  const [folderPickerIndex, setFolderPickerIndex] = useState(null);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -102,6 +104,24 @@ const UserManagementPanel = ({ onUsersChanged }) => {
 
   const handleAddAccess = () => {
     setAccessDraft((entries) => [...entries, { path: '', password: '' }]);
+  };
+
+  const handleOpenFolderPicker = (index) => {
+    setFolderPickerIndex(index);
+  };
+
+  const handleFolderSelected = (path) => {
+    if (folderPickerIndex === null) {
+      return;
+    }
+    setAccessDraft((entries) =>
+      entries.map((entry, idx) => (idx === folderPickerIndex ? { ...entry, path } : entry))
+    );
+    setFolderPickerIndex(null);
+  };
+
+  const handleFolderPickerClose = () => {
+    setFolderPickerIndex(null);
   };
 
   const handleSaveAccess = async () => {
@@ -355,13 +375,36 @@ const UserManagementPanel = ({ onUsersChanged }) => {
                         className="flex flex-col gap-2 rounded-2xl border border-white/30 bg-white/35 p-3 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.4)] sm:flex-row sm:items-center"
                         key={`${entry.path}-${index}`}
                       >
-                        <input
-                          type="text"
-                          value={entry.path}
-                          onChange={(event) => handleAccessChange(index, 'path', event.target.value)}
-                          placeholder="Folder path (e.g. Projects/TeamA)"
-                          className="w-full rounded-2xl border border-white/35 bg-white/40 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
-                        />
+                        <div className="flex w-full flex-col gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">
+                            Folder
+                          </span>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <div className="flex-1 rounded-2xl border border-white/35 bg-white/40 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
+                              {entry.path ? entry.path : 'Full storage access'}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="inline-flex items-center justify-center rounded-full border border-white/25 bg-white/30 px-4 py-2 text-sm font-semibold text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition hover:border-blue-300/60 hover:bg-blue-50/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                                onClick={() => handleOpenFolderPicker(index)}
+                                disabled={savingAccess}
+                              >
+                                Browse…
+                              </button>
+                              {entry.path ? (
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center justify-center rounded-full border border-white/25 bg-white/30 px-3 py-2 text-xs font-semibold text-rose-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition hover:border-rose-300/60 hover:bg-rose-50/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500"
+                                  onClick={() => handleAccessChange(index, 'path', '')}
+                                  disabled={savingAccess}
+                                >
+                                  Clear
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
                         <input
                           type="text"
                           value={entry.password}
@@ -391,6 +434,13 @@ const UserManagementPanel = ({ onUsersChanged }) => {
                     </button>
                   </div>
                 </div>
+                {folderPickerIndex !== null ? (
+                  <FolderPickerDialog
+                    initialPath={accessDraft[folderPickerIndex]?.path || ''}
+                    onSelect={handleFolderSelected}
+                    onCancel={handleFolderPickerClose}
+                  />
+                ) : null}
                 <div className="relative z-10 flex flex-wrap gap-3">
                   <button
                     type="button"
