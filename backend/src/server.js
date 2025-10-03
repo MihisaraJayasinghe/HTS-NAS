@@ -556,11 +556,6 @@ async function normalizeAccessEntries(access) {
     }
     seen.add(relativePath);
     const password = typeof entry.password === 'string' ? entry.password.trim() : '';
-    if (!password) {
-      const error = new Error('Password is required for each access entry');
-      error.status = 400;
-      throw error;
-    }
     const { absolute } = resolveAbsolute(relativePath);
     try {
       const stats = await fs.stat(absolute);
@@ -596,6 +591,14 @@ async function applyAccessLocks(accessEntries) {
       continue;
     }
     const current = locks[entry.path];
+    if (!entry.password) {
+      if (current) {
+        delete locks[entry.path];
+        updated = true;
+      }
+      // eslint-disable-next-line no-continue
+      continue;
+    }
     let needsUpdate = true;
     if (current) {
       // eslint-disable-next-line no-await-in-loop
