@@ -116,7 +116,6 @@ function getAccessList(account) {
   }
   return account.access.map((entry) => ({
     path: normalizeRelative(entry.path || ''),
-    password: String(entry.password || ''),
   }));
 }
 

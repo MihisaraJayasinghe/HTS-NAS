@@ -555,7 +555,6 @@ async function normalizeAccessEntries(access) {
       throw error;
     }
     seen.add(relativePath);
-    const password = typeof entry.password === 'string' ? entry.password.trim() : '';
     const { absolute } = resolveAbsolute(relativePath);
     try {
       const stats = await fs.stat(absolute);
@@ -572,7 +571,7 @@ async function normalizeAccessEntries(access) {
       }
       throw err;
     }
-    normalized.push({ path: relativePath, password });
+    normalized.push({ path: relativePath });
   }
   return normalized;
 }
@@ -714,19 +713,12 @@ async function assertUnlocked(relativePath, password, account) {
   if (!entry) {
     return { locks, entry: null };
   }
-  let effectivePassword = password;
-  if (!effectivePassword && account) {
-    const accessEntry = getAccessList(account).find((item) => item.path === relativePath);
-    if (accessEntry?.password) {
-      effectivePassword = accessEntry.password;
-    }
-  }
-  if (!effectivePassword) {
+  if (!password) {
     const error = new Error('Password required for locked item');
     error.status = 423;
     throw error;
   }
-  const match = await bcrypt.compare(effectivePassword, entry.hash);
+  const match = await bcrypt.compare(password, entry.hash);
   if (!match) {
     const error = new Error('Invalid password for locked item');
     error.status = 403;
