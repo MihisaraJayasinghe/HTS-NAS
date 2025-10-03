@@ -48,6 +48,7 @@ let eventStreamAbortController = null;
 let eventStreamConnecting = false;
 let eventStreamReconnectTimer = null;
 let eventStreamBackoffAttempts = 0;
+let eventSourceInstance = null;
 
 function notifyEventListeners(event) {
   eventListeners.forEach((listener) => {
@@ -68,6 +69,10 @@ function stopEventStream() {
     eventStreamAbortController.abort();
     eventStreamAbortController = null;
   }
+  if (eventSourceInstance) {
+    eventSourceInstance.close();
+    eventSourceInstance = null;
+  }
   eventStreamConnecting = false;
 }
 
@@ -87,8 +92,27 @@ function scheduleEventStreamReconnect() {
   eventStreamBackoffAttempts += 1;
 }
 
-async function startEventStream() {
-  if (eventStreamConnecting || eventStreamAbortController || !authToken || eventListeners.size === 0) {
+function createEventSource() {
+  let eventUrl = `${API_ROOT.replace(/\/$/, '')}/events`;
+  if (typeof window !== 'undefined' && !eventUrl.startsWith('http')) {
+    const baseOrigin = window.location.origin;
+    if (!eventUrl.startsWith('/')) {
+      eventUrl = `/${eventUrl}`;
+    }
+    eventUrl = `${baseOrigin}${eventUrl}`;
+  }
+  const url = new URL(eventUrl);
+  url.searchParams.set('token', authToken);
+  try {
+    const source = new EventSource(url.toString(), { withCredentials: true });
+    return source;
+  } catch (error) {
+    return null;
+  }
+}
+
+async function startFetchStream() {
+  if (eventStreamConnecting || eventStreamAbortController || eventSourceInstance || !authToken || eventListeners.size === 0) {
     return;
   }
   eventStreamConnecting = true;
@@ -99,15 +123,24 @@ async function startEventStream() {
   eventStreamAbortController = controller;
 
   try {
-    const response = await fetch(`${API_ROOT}/events`, {
+    let streamUrl = `${API_ROOT.replace(/\/$/, '')}/events`;
+    if (typeof window !== 'undefined' && !streamUrl.startsWith('http')) {
+      const baseOrigin = window.location.origin;
+      if (!streamUrl.startsWith('/')) {
+        streamUrl = `/${streamUrl}`;
+      }
+      streamUrl = `${baseOrigin}${streamUrl}`;
+    }
+    const url = new URL(streamUrl);
+    url.searchParams.set('token', authToken);
+
+    const response = await fetch(url.toString(), {
       method: 'GET',
-      headers: authToken
-        ? {
-            Authorization: `Bearer ${authToken}`,
-          }
-        : undefined,
-      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
       cache: 'no-store',
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -119,6 +152,7 @@ async function startEventStream() {
     }
 
     eventStreamBackoffAttempts = 0;
+    eventStreamConnecting = false;
     notifyEventListeners({ type: 'connection', data: { state: 'open' } });
 
     const reader = response.body.getReader();
@@ -188,13 +222,79 @@ async function startEventStream() {
       });
     }
   } finally {
-    eventStreamConnecting = false;
     eventStreamAbortController = null;
+    eventStreamConnecting = false;
     if (!authToken || eventListeners.size === 0) {
       return;
     }
     scheduleEventStreamReconnect();
   }
+}
+
+async function startEventStream() {
+  if (eventStreamConnecting || eventSourceInstance || eventStreamAbortController || !authToken || eventListeners.size === 0) {
+    return;
+  }
+
+  if (typeof window !== 'undefined' && typeof EventSource === 'function') {
+    eventStreamConnecting = true;
+    eventStreamBackoffAttempts = Math.max(eventStreamBackoffAttempts, 0);
+    notifyEventListeners({ type: 'connection', data: { state: 'connecting' } });
+
+    const source = createEventSource();
+    if (source) {
+      eventSourceInstance = source;
+
+      const handleOpen = () => {
+        eventStreamConnecting = false;
+        eventStreamBackoffAttempts = 0;
+        notifyEventListeners({ type: 'connection', data: { state: 'open' } });
+      };
+
+      const handleIncomingEvent = (evt) => {
+        let payload = null;
+        if (evt.data) {
+          try {
+            payload = JSON.parse(evt.data);
+          } catch (parseError) {
+            payload = evt.data;
+          }
+        }
+        notifyEventListeners({ type: evt.type || 'message', data: payload });
+      };
+
+      const handleError = (error) => {
+        notifyEventListeners({
+          type: 'connection',
+          data: { state: 'error', message: error?.message || 'Event stream error' },
+        });
+        source.onopen = null;
+        source.onmessage = null;
+        source.removeEventListener('items', handleIncomingEvent);
+        source.onerror = null;
+        source.close();
+        eventSourceInstance = null;
+        eventStreamConnecting = false;
+        if (!authToken || eventListeners.size === 0) {
+          return;
+        }
+        if (typeof window !== 'undefined') {
+          startFetchStream();
+        } else {
+          scheduleEventStreamReconnect();
+        }
+      };
+
+      source.onopen = handleOpen;
+      source.onmessage = handleIncomingEvent;
+      source.addEventListener('items', handleIncomingEvent);
+      source.onerror = handleError;
+      return;
+    }
+    eventStreamConnecting = false;
+  }
+
+  startFetchStream();
 }
 
 function restartEventStream() {
