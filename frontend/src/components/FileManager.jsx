@@ -4,6 +4,7 @@ import Breadcrumbs from './Breadcrumbs.jsx';
 import FileList from './FileList.jsx';
 import QuickLook from './QuickLook.jsx';
 import Toolbar from './Toolbar.jsx';
+import RecycleBin from './RecycleBin.jsx';
 import {
   listItems,
   createFolder,
@@ -16,7 +17,11 @@ import {
   unlockItem,
   fetchFileContent,
   subscribeToEvents,
+  listRecycleBinItems,
+  restoreRecycleBinItems,
+  purgeRecycleBinItems,
 } from '../services/api.js';
+import formatBytes from '../utils/formatBytes.js';
 
 const sanitizePath = (input) => {
   if (typeof input !== 'string') {
@@ -39,20 +44,6 @@ const joinPath = (base, name) => {
     return name;
   }
   return `${sanitizedBase}/${name}`;
-};
-
-const formatBytes = (bytes) => {
-  if (!bytes || Number.isNaN(bytes)) {
-    return '0 B';
-  }
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let value = bytes;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return `${value < 10 && unitIndex > 0 ? value.toFixed(1) : Math.round(value)} ${units[unitIndex]}`;
 };
 
 const initialUploadState = {
@@ -105,6 +96,7 @@ const FileManager = ({
   const normalizedInitial = useMemo(() => sanitizePath(initialPath), [initialPath]);
   const startingPath = normalizedInitial || normalizedRoot || '';
 
+  const [displayMode, setDisplayMode] = useState('explorer');
   const [currentPath, setCurrentPath] = useState(startingPath);
   const [items, setItems] = useState([]);
   const [breadcrumbs, setBreadcrumbs] = useState([]);
@@ -119,6 +111,10 @@ const FileManager = ({
     }
     return 'grid';
   });
+  const [binItems, setBinItems] = useState([]);
+  const [binLoading, setBinLoading] = useState(false);
+  const [binRefreshToken, setBinRefreshToken] = useState(0);
+  const [binFetchError, setBinFetchError] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
   const [uploadState, setUploadState] = useState(initialUploadState);
   const [quickLook, setQuickLook] = useState(initialQuickLookState);
@@ -130,6 +126,7 @@ const FileManager = ({
   const uploadResetTimeoutRef = useRef(null);
   const currentPathRef = useRef(currentPath);
   const refreshRef = useRef(() => {});
+  const recycleRefreshRef = useRef(() => {});
   const updatePathRef = useRef(() => {});
   const clipboardRef = useRef(initialClipboardState);
   const keyHandlerRef = useRef({
@@ -137,10 +134,15 @@ const FileManager = ({
     cut: () => {},
     paste: () => {},
   });
+  const displayModeRef = useRef(displayMode);
 
   useEffect(() => {
     setCurrentPath(startingPath);
   }, [startingPath]);
+
+  useEffect(() => {
+    displayModeRef.current = displayMode;
+  }, [displayMode]);
 
   useEffect(() => {
     currentPathRef.current = currentPath;
@@ -187,6 +189,37 @@ const FileManager = ({
   }, [currentPath, refreshToken]);
 
   useEffect(() => {
+    if (displayMode !== 'recycle') {
+      setBinLoading(false);
+      return () => {};
+    }
+    let active = true;
+    setBinLoading(true);
+    setBinFetchError('');
+    listRecycleBinItems()
+      .then((data) => {
+        if (!active) {
+          return;
+        }
+        setBinItems(Array.isArray(data?.items) ? data.items : []);
+      })
+      .catch((err) => {
+        if (!active) {
+          return;
+        }
+        setBinFetchError(err?.message || 'Failed to load recycle bin');
+      })
+      .finally(() => {
+        if (active) {
+          setBinLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [displayMode, binRefreshToken]);
+
+  useEffect(() => {
     if (!message) {
       return undefined;
     }
@@ -202,7 +235,7 @@ const FileManager = ({
 
   useEffect(() => {
     setSelectedItem(null);
-  }, [currentPath]);
+  }, [currentPath, displayMode]);
 
   useEffect(() => {
     clipboardRef.current = clipboard;
@@ -266,6 +299,12 @@ const FileManager = ({
       }
 
       const data = event.data || {};
+      if (
+        displayModeRef.current === 'recycle' &&
+        ['item-deleted', 'item-restored', 'items-restored'].includes(data.action)
+      ) {
+        recycleRefreshRef.current();
+      }
       const normalizedCurrent = sanitizePath(currentPathRef.current || '');
       const normalizedPaths = Array.isArray(data.paths)
         ? data.paths.map((value) => sanitizePath(value || ''))
@@ -392,6 +431,11 @@ const FileManager = ({
   }, []);
   refreshRef.current = refresh;
 
+  const refreshRecycleBin = useCallback(() => {
+    setBinRefreshToken((token) => token + 1);
+  }, []);
+  recycleRefreshRef.current = refreshRecycleBin;
+
   const updatePath = (path) => {
     const sanitized = sanitizePath(path);
     if (!isWithinRoot(sanitized)) {
@@ -455,7 +499,8 @@ const FileManager = ({
     updatePath(parentPath);
   };
 
-  const performAction = async (action, successMessage) => {
+  const performAction = async (action, successMessage, options = {}) => {
+    const { refreshFiles = true, refreshBin: shouldRefreshBin = false } = options;
     try {
       setError('');
       setMessage('');
@@ -463,7 +508,12 @@ const FileManager = ({
       if (successMessage) {
         setMessage(successMessage);
       }
-      refresh();
+      if (refreshFiles) {
+        refresh();
+      }
+      if (shouldRefreshBin) {
+        recycleRefreshRef.current();
+      }
       return true;
     } catch (err) {
       setError(err.message || 'Something went wrong');
@@ -794,9 +844,9 @@ const FileManager = ({
       return;
     }
     const confirmed = await dialog.confirm({
-      title: 'Delete item',
-      message: `Delete ${item.type === 'directory' ? 'folder' : 'file'} “${item.name}”?`,
-      confirmLabel: 'Delete',
+      title: 'Move to recycle bin',
+      message: `Move ${item.type === 'directory' ? 'folder' : 'file'} “${item.name}” to the recycle bin?`,
+      confirmLabel: 'Move',
       destructive: true,
     });
     if (!confirmed) {
@@ -814,16 +864,67 @@ const FileManager = ({
         });
       }
       if (!password) {
-        setMessage('Deletion cancelled');
+        setMessage('Move cancelled');
         return;
       }
     }
 
     await performAction(
       () => deleteItem(item.path || joinPath(currentPath, item.name), password || undefined),
-      `Deleted “${item.name}”`
+      `Moved “${item.name}” to recycle bin`,
+      { refreshBin: true }
     );
   };
+
+  const handleRestoreFromRecycleBin = async (entry) => {
+    if (!entry) {
+      return;
+    }
+    const destinationLabel = entry.originalParent
+      ? `“${entry.originalParent}”`
+      : 'Home';
+    const confirmed = await dialog.confirm({
+      title: 'Restore item',
+      message: `Restore “${entry.name}” to ${destinationLabel}?`,
+      confirmLabel: 'Restore',
+    });
+    if (!confirmed) {
+      return;
+    }
+    await performAction(
+      () => restoreRecycleBinItems([entry.id]),
+      `Restored “${entry.name}”`,
+      { refreshBin: true }
+    );
+  };
+
+  const handleDeleteFromRecycleBin = async (entry) => {
+    if (!entry) {
+      return;
+    }
+    const confirmed = await dialog.confirm({
+      title: 'Delete permanently',
+      message: `Permanently delete “${entry.name}”? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+    await performAction(
+      () => purgeRecycleBinItems([entry.id]),
+      `Removed “${entry.name}” permanently`,
+      { refreshFiles: false, refreshBin: true }
+    );
+  };
+
+  const recycleSubtitleText =
+    'Restore or permanently delete files you have moved to the recycle bin.';
+  const headingLabel = displayMode === 'recycle' ? 'Recycle Bin' : 'File Explorer';
+  const headingTitle = displayMode === 'recycle' ? 'Recycle Bin' : title;
+  const headingSubtitle = displayMode === 'recycle' ? recycleSubtitleText : subtitle;
+  const actionError = error;
+  const showUploadBanner = displayMode === 'explorer' && uploadState.active;
 
   const handleRename = async (item) => {
     if (!allowRename) {
@@ -1002,6 +1103,12 @@ const FileManager = ({
     }
   };
 
+  useEffect(() => {
+    if (displayMode !== 'explorer' && quickLook.open) {
+      closeQuickLook();
+    }
+  }, [displayMode, quickLook.open]);
+
   const handleDownload = async (item) => {
     if (!item || item.type !== 'file') {
       return;
@@ -1142,46 +1249,77 @@ const FileManager = ({
       <div className="relative z-10 flex flex-col gap-6">
         <header className="space-y-2">
           <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em] text-blue-600">
-            File Explorer
+            {headingLabel}
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
-          {subtitle ? <p className="text-sm font-medium text-slate-600 sm:text-base">{subtitle}</p> : null}
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{headingTitle}</h1>
+          {headingSubtitle ? (
+            <p className="text-sm font-medium text-slate-600 sm:text-base">{headingSubtitle}</p>
+          ) : null}
         </header>
 
-        <Toolbar
-          currentPath={currentPath}
-          onCreateFolder={handleCreateFolder}
-          onUpload={handleUpload}
-          onRefresh={refresh}
-          onNavigateUp={handleNavigateUp}
-          canNavigateUp={canNavigateUp}
-          onQuickLook={() => handleQuickLook()}
-          canQuickLook={canQuickLook}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-          allowCreate={allowCreate}
-          allowUpload={allowUpload}
-          allowQuickLook={allowQuickLook}
-          allowViewToggle={allowViewToggle}
-          uploadState={uploadState}
-          onCopy={handleCopyItem}
-          onCut={allowRename ? handleCutItem : undefined}
-          onPaste={() => handlePasteClipboard()}
-          canCopy={canCopySelected}
-          canCut={canCutSelected}
-          canPaste={canPasteFromClipboard}
-          clipboardLabel={clipboardLabel}
-          isRefreshing={refreshing}
-        />
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setDisplayMode('explorer')}
+            className={`rounded-xl border px-4 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 ${
+              displayMode === 'explorer'
+                ? 'border-blue-400 bg-blue-100/80 text-blue-900 shadow-inner'
+                : 'border-white/30 bg-white/30 text-slate-700 hover:border-blue-300 hover:text-blue-700'
+            }`}
+          >
+            Explorer
+          </button>
+          <button
+            type="button"
+            onClick={() => setDisplayMode('recycle')}
+            className={`rounded-xl border px-4 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 ${
+              displayMode === 'recycle'
+                ? 'border-blue-400 bg-blue-100/80 text-blue-900 shadow-inner'
+                : 'border-white/30 bg-white/30 text-slate-700 hover:border-blue-300 hover:text-blue-700'
+            }`}
+          >
+            Recycle Bin
+          </button>
+        </div>
 
-        <Breadcrumbs breadcrumbs={breadcrumbs} onNavigate={handleNavigate} />
+        {displayMode === 'explorer' ? (
+          <>
+            <Toolbar
+              currentPath={currentPath}
+              onCreateFolder={handleCreateFolder}
+              onUpload={handleUpload}
+              onRefresh={refresh}
+              onNavigateUp={handleNavigateUp}
+              canNavigateUp={canNavigateUp}
+              onQuickLook={() => handleQuickLook()}
+              canQuickLook={canQuickLook}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              allowCreate={allowCreate}
+              allowUpload={allowUpload}
+              allowQuickLook={allowQuickLook}
+              allowViewToggle={allowViewToggle}
+              uploadState={uploadState}
+              onCopy={handleCopyItem}
+              onCut={allowRename ? handleCutItem : undefined}
+              onPaste={() => handlePasteClipboard()}
+              canCopy={canCopySelected}
+              canCut={canCutSelected}
+              canPaste={canPasteFromClipboard}
+              clipboardLabel={clipboardLabel}
+              isRefreshing={refreshing}
+            />
 
-        {error && (
+            <Breadcrumbs breadcrumbs={breadcrumbs} onNavigate={handleNavigate} />
+          </>
+        ) : null}
+
+        {actionError && (
           <div
             className="rounded-2xl border border-rose-200/70 bg-rose-100/80 px-4 py-3 text-sm font-semibold text-rose-600 shadow-[0_12px_30px_-18px_rgba(244,63,94,0.45)]"
             role="alert"
           >
-            {error}
+            {actionError}
           </div>
         )}
         {message && (
@@ -1192,7 +1330,7 @@ const FileManager = ({
             {message}
           </div>
         )}
-        {uploadState.active && (
+        {showUploadBanner && (
           <div className="rounded-2xl border border-blue-200/70 bg-blue-50/80 px-4 py-3 text-sm shadow-[0_12px_30px_-20px_rgba(59,130,246,0.45)]" role="status">
             <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-500">
               Uploading Files
@@ -1217,39 +1355,50 @@ const FileManager = ({
           </div>
         )}
 
-        {loading ? (
-          <div className="flex min-h-[240px] items-center justify-center rounded-2xl border border-white/25 bg-white/30 text-sm font-semibold text-blue-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
-            Loading…
-          </div>
+        {displayMode === 'explorer' ? (
+          loading ? (
+            <div className="flex min-h-[240px] items-center justify-center rounded-2xl border border-white/25 bg-white/30 text-sm font-semibold text-blue-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
+              Loading…
+            </div>
+          ) : (
+            <FileList
+              items={items}
+              viewMode={viewMode}
+              selectedItem={selectedItem}
+              onSelect={handleSelectItem}
+              onOpen={handleOpen}
+              onQuickLook={handleQuickLook}
+              onRename={handleRename}
+              onDelete={handleDelete}
+              onToggleLock={handleToggleLock}
+              onDownload={handleDownload}
+              allowRename={allowRename}
+              allowDelete={allowDelete}
+              allowLockToggle={allowLockToggle}
+              allowQuickLook={allowQuickLook}
+              onCopyItem={handleCopyItem}
+              onCutItem={allowRename ? handleCutItem : undefined}
+              onDragStart={canHandleInternalDrops ? handleDragStartItem : undefined}
+              onDragEnd={canHandleInternalDrops ? handleDragEndItem : undefined}
+              onDropItem={canHandleInternalDrops ? handleDropOnItem : undefined}
+              onDropToCurrent={canHandleInternalDrops ? handleDropToCurrent : undefined}
+              onDropFiles={allowUpload ? handleDropFiles : undefined}
+            />
+          )
         ) : (
-          <FileList
-            items={items}
-            viewMode={viewMode}
-            selectedItem={selectedItem}
-            onSelect={handleSelectItem}
-            onOpen={handleOpen}
-            onQuickLook={handleQuickLook}
-            onRename={handleRename}
-            onDelete={handleDelete}
-            onToggleLock={handleToggleLock}
-            onDownload={handleDownload}
-            allowRename={allowRename}
-            allowDelete={allowDelete}
-            allowLockToggle={allowLockToggle}
-            allowQuickLook={allowQuickLook}
-            onCopyItem={handleCopyItem}
-            onCutItem={allowRename ? handleCutItem : undefined}
-            onDragStart={canHandleInternalDrops ? handleDragStartItem : undefined}
-            onDragEnd={canHandleInternalDrops ? handleDragEndItem : undefined}
-            onDropItem={canHandleInternalDrops ? handleDropOnItem : undefined}
-            onDropToCurrent={canHandleInternalDrops ? handleDropToCurrent : undefined}
-            onDropFiles={allowUpload ? handleDropFiles : undefined}
+          <RecycleBin
+            items={binItems}
+            loading={binLoading}
+            errorMessage={binFetchError}
+            onRefresh={refreshRecycleBin}
+            onRestore={handleRestoreFromRecycleBin}
+            onDelete={handleDeleteFromRecycleBin}
           />
         )}
       </div>
 
       <QuickLook
-        isOpen={quickLook.open}
+        isOpen={displayMode === 'explorer' && quickLook.open}
         item={quickLook.item}
         previewUrl={quickLook.url}
         mimeType={quickLook.mimeType}

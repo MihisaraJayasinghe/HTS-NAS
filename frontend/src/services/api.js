@@ -474,6 +474,32 @@ export function deleteItem(path, password) {
   });
 }
 
+const normalizeIdsPayload = (ids) => {
+  if (Array.isArray(ids)) {
+    return ids.map((value) => String(value || '').trim()).filter(Boolean);
+  }
+  const single = String(ids || '').trim();
+  return single ? [single] : [];
+};
+
+export function listRecycleBinItems() {
+  return request('/recycle-bin');
+}
+
+export function restoreRecycleBinItems(ids) {
+  return request('/recycle-bin/restore', {
+    method: 'POST',
+    body: { ids: normalizeIdsPayload(ids) },
+  });
+}
+
+export function purgeRecycleBinItems(ids) {
+  return request('/recycle-bin', {
+    method: 'DELETE',
+    body: { ids: normalizeIdsPayload(ids) },
+  });
+}
+
 export function renameItem(path, newName, password) {
   return request('/items/rename', {
     method: 'PUT',

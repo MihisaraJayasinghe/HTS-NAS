@@ -29,6 +29,12 @@ const {
   toPublicUser,
 } = require('./stores/accountStore');
 const { renameAccountUsername } = require('./services/profileService');
+const {
+  ensureRecycleBinInitialized,
+  loadRecycleBinEntries,
+  saveRecycleBinEntries,
+  addRecycleBinEntry,
+} = require('./stores/recycleBinStore');
 
 const MIME_TYPES = {
   '.aac': 'audio/aac',
@@ -89,6 +95,7 @@ app.use((req, res, next) => {
 const NAS_ROOT = process.env.NAS_ROOT
   ? path.resolve(process.env.NAS_ROOT)
   : path.join(__dirname, '..', '..', 'nas_storage');
+const RECYCLE_BIN_ROOT = path.join(NAS_ROOT, '.recycle-bin');
 const LOCKS_FILE = path.join(__dirname, '..', 'locks.json');
 const FRONTEND_DIST = path.join(__dirname, '..', '..', 'frontend', 'dist');
 const CHAT_FILE = path.join(__dirname, '..', 'chat.json');
@@ -129,6 +136,7 @@ function revokeUserSessions(username) {
 }
 
 fsSync.mkdirSync(NAS_ROOT, { recursive: true });
+fsSync.mkdirSync(RECYCLE_BIN_ROOT, { recursive: true });
 
 function normalizeRelative(input = '') {
   const safeInput = String(input).replace(/\\/g, '/').trim();
@@ -160,6 +168,48 @@ function resolveAbsolute(input = '') {
     throw new Error('Invalid path');
   }
   return { absolute: resolved, relative };
+}
+
+function sanitizeRecycleBinRelative(input = '') {
+  const safeInput = String(input).replace(/\\/g, '/').trim();
+  const segments = safeInput.split('/');
+  const stack = [];
+  segments.forEach((segment) => {
+    if (!segment || segment === '.') {
+      return;
+    }
+    if (segment === '..') {
+      if (stack.length) {
+        stack.pop();
+      }
+      return;
+    }
+    stack.push(segment);
+  });
+  return stack.join('/');
+}
+
+function resolveRecycleBinAbsolute(relativePath = '') {
+  const normalized = sanitizeRecycleBinRelative(relativePath);
+  if (!normalized) {
+    throw new Error('Invalid recycle bin path');
+  }
+  return path.join(RECYCLE_BIN_ROOT, ...normalized.split('/'));
+}
+
+function getRecycleBinPaths(entry) {
+  const normalized = sanitizeRecycleBinRelative(entry?.binPath || '');
+  if (!normalized) {
+    const error = new Error('Invalid recycle bin entry');
+    error.code = 'INVALID_BIN_PATH';
+    throw error;
+  }
+  const segments = normalized.split('/');
+  return {
+    relative: normalized,
+    absolute: resolveRecycleBinAbsolute(normalized),
+    ownerSegment: segments[0] || '',
+  };
 }
 
 async function readDiskSpaceViaStatfs(rootPath) {
@@ -1680,6 +1730,35 @@ function deleteLocksForPath(locks, relativePath) {
   });
 }
 
+async function cleanupRecycleBinOwnerDirectory(owner) {
+  const safeOwner = sanitizeRecycleBinRelative(owner);
+  if (!safeOwner) {
+    return;
+  }
+  const ownerDir = path.join(RECYCLE_BIN_ROOT, safeOwner);
+  try {
+    const contents = await fs.readdir(ownerDir);
+    if (!contents || contents.length === 0) {
+      await fs.rmdir(ownerDir);
+    }
+  } catch (error) {
+    if (error.code !== 'ENOENT' && error.code !== 'ENOTEMPTY') {
+      throw error;
+    }
+  }
+}
+
+function canAccessRecycleBinEntry(account, entry) {
+  if (!entry) {
+    return false;
+  }
+  if (account?.role === 'admin') {
+    return true;
+  }
+  const owner = typeof entry.owner === 'string' ? entry.owner : '';
+  return owner && owner.toLowerCase() === String(account?.username || '').toLowerCase();
+}
+
 app.delete('/api/items', requireAuth, async (req, res, next) => {
   try {
     const { path: targetPath, password } = req.body;
@@ -1700,11 +1779,30 @@ app.delete('/api/items', requireAuth, async (req, res, next) => {
       : '';
     const itemName = path.basename(absolute);
     const itemType = stats.isDirectory() ? 'directory' : 'file';
-    if (stats.isDirectory()) {
-      await fs.rm(absolute, { recursive: true, force: true });
-    } else {
-      await fs.unlink(absolute);
-    }
+    const actorUsername = String(req.account?.username || '').trim() || 'unknown';
+    const ownerKeyCandidate = sanitizeUsername(actorUsername) || actorUsername.replace(/[^A-Za-z0-9_.-]/g, '');
+    const ownerKey = sanitizeRecycleBinRelative(ownerKeyCandidate || 'user');
+    const entryId = typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : crypto.randomBytes(16).toString('hex');
+    const binRelative = sanitizeRecycleBinRelative(`${ownerKey}/${entryId}`);
+    const binAbsolute = resolveRecycleBinAbsolute(binRelative);
+    await fs.mkdir(path.dirname(binAbsolute), { recursive: true });
+    await fs.rename(absolute, binAbsolute);
+
+    const recycleEntry = {
+      id: entryId,
+      owner: actorUsername,
+      name: itemName,
+      type: itemType,
+      size: itemType === 'file' ? stats.size : null,
+      originalPath: relative,
+      originalParent: parentRelative,
+      deletedAt: new Date().toISOString(),
+      binPath: binRelative,
+    };
+
+    await addRecycleBinEntry(recycleEntry);
 
     await deleteLocksForPath(locks, relative);
     await saveLocks(locks);
@@ -1724,11 +1822,208 @@ app.delete('/api/items', requireAuth, async (req, res, next) => {
       ],
     });
 
-    res.json({ message: 'Item deleted' });
+    res.json({ message: 'Item moved to recycle bin' });
   } catch (error) {
     if (error.code === 'ENOENT') {
       return res.status(404).json({ message: 'Item not found' });
     }
+    next(error);
+  }
+});
+
+app.get('/api/recycle-bin', requireAuth, async (req, res, next) => {
+  try {
+    const entries = await loadRecycleBinEntries();
+    const filtered = entries
+      .filter((entry) => canAccessRecycleBinEntry(req.account, entry))
+      .map((entry) => ({
+        id: entry.id,
+        owner: entry.owner,
+        name: entry.name,
+        type: entry.type === 'directory' ? 'directory' : 'file',
+        size: Number.isFinite(entry.size) ? Number(entry.size) : null,
+        originalPath: entry.originalPath || '',
+        originalParent: entry.originalParent || '',
+        deletedAt: entry.deletedAt || null,
+      }))
+      .sort((a, b) => {
+        const aTime = a.deletedAt ? Date.parse(a.deletedAt) : 0;
+        const bTime = b.deletedAt ? Date.parse(b.deletedAt) : 0;
+        return bTime - aTime;
+      });
+
+    res.json({ items: filtered });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/recycle-bin/restore', requireAuth, async (req, res, next) => {
+  try {
+    const { ids } = req.body || {};
+    const idList = Array.isArray(ids) ? ids.map((value) => String(value || '').trim()).filter(Boolean) : [];
+    if (idList.length === 0) {
+      return res.status(400).json({ message: 'No recycle bin items specified' });
+    }
+
+    const entries = await loadRecycleBinEntries();
+    const byId = new Map(entries.map((entry) => [entry.id, entry]));
+    const accessible = idList
+      .map((id) => byId.get(id))
+      .filter((entry) => entry && canAccessRecycleBinEntry(req.account, entry));
+
+    if (accessible.length === 0) {
+      return res.status(404).json({ message: 'Recycle bin items not found' });
+    }
+
+    const missing = [];
+    const conflicts = [];
+
+    await Promise.all(
+      accessible.map(async (entry) => {
+        let binPaths;
+        try {
+          binPaths = getRecycleBinPaths(entry);
+        } catch (error) {
+          if (error.code === 'INVALID_BIN_PATH') {
+            missing.push(entry);
+            return;
+          }
+          throw error;
+        }
+
+        try {
+          await fs.stat(binPaths.absolute);
+        } catch (error) {
+          if (error.code === 'ENOENT') {
+            missing.push(entry);
+            return;
+          }
+          throw error;
+        }
+
+        try {
+          const { absolute: targetAbsolute } = resolveAbsolute(entry.originalPath || '');
+          await fs.access(targetAbsolute);
+          conflicts.push(entry);
+        } catch (error) {
+          if (error.code !== 'ENOENT') {
+            throw error;
+          }
+        }
+      })
+    );
+
+    if (missing.length > 0) {
+      const remaining = entries.filter((entry) => !missing.some((gone) => gone.id === entry.id));
+      await saveRecycleBinEntries(remaining);
+      await Promise.all(
+        missing.map(async (entry) => {
+          try {
+            const { ownerSegment } = getRecycleBinPaths(entry);
+            if (ownerSegment) {
+              await cleanupRecycleBinOwnerDirectory(ownerSegment);
+            }
+          } catch (error) {
+            if (error.code !== 'INVALID_BIN_PATH') {
+              throw error;
+            }
+          }
+        })
+      );
+    }
+
+    const available = accessible.filter((entry) => !missing.some((gone) => gone.id === entry.id));
+
+    if (available.length === 0) {
+      return res.status(404).json({ message: 'Recycle bin items are no longer available' });
+    }
+
+    if (conflicts.length > 0) {
+      return res.status(409).json({
+        message: 'Some items cannot be restored because the original location already contains an item with the same name',
+        conflicts: conflicts.map((entry) => ({ id: entry.id, path: entry.originalPath })),
+      });
+    }
+
+    const restored = [];
+    // eslint-disable-next-line no-restricted-syntax
+    for (const entry of available) {
+      const { absolute: binAbsolute, ownerSegment } = getRecycleBinPaths(entry);
+      const { absolute: targetAbsolute } = resolveAbsolute(entry.originalPath || '');
+      const parentDir = path.dirname(targetAbsolute);
+      await fs.mkdir(parentDir, { recursive: true });
+      await fs.rename(binAbsolute, targetAbsolute);
+      restored.push(entry);
+      if (ownerSegment) {
+        await cleanupRecycleBinOwnerDirectory(ownerSegment);
+      }
+    }
+
+    if (restored.length > 0) {
+      const remaining = entries.filter((entry) => !restored.some((restoredEntry) => restoredEntry.id === entry.id));
+      await saveRecycleBinEntries(remaining);
+      emitItemsChanged({
+        actor: req.account?.username,
+        action: restored.length === 1 ? 'item-restored' : 'items-restored',
+        paths: restored.map((entry) => entry.originalParent || ''),
+        items: restored.map((entry) => ({
+          name: entry.name,
+          type: entry.type === 'directory' ? 'directory' : 'file',
+          path: entry.originalPath || '',
+          parent: entry.originalParent || '',
+        })),
+      });
+    }
+
+    res.json({
+      message:
+        restored.length === 1
+          ? `Restored “${restored[0].name}”`
+          : `Restored ${restored.length} items`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/recycle-bin', requireAuth, async (req, res, next) => {
+  try {
+    const { ids } = req.body || {};
+    const idList = Array.isArray(ids) ? ids.map((value) => String(value || '').trim()).filter(Boolean) : [];
+    if (idList.length === 0) {
+      return res.status(400).json({ message: 'No recycle bin items specified' });
+    }
+
+    const entries = await loadRecycleBinEntries();
+    const byId = new Map(entries.map((entry) => [entry.id, entry]));
+    const accessible = idList
+      .map((id) => byId.get(id))
+      .filter((entry) => entry && canAccessRecycleBinEntry(req.account, entry));
+
+    if (accessible.length === 0) {
+      return res.status(404).json({ message: 'Recycle bin items not found' });
+    }
+
+    // eslint-disable-next-line no-restricted-syntax
+    for (const entry of accessible) {
+      const { absolute: binAbsolute, ownerSegment } = getRecycleBinPaths(entry);
+      await fs.rm(binAbsolute, { recursive: true, force: true });
+      if (ownerSegment) {
+        await cleanupRecycleBinOwnerDirectory(ownerSegment);
+      }
+    }
+
+    const remaining = entries.filter((entry) => !accessible.some((removed) => removed.id === entry.id));
+    await saveRecycleBinEntries(remaining);
+
+    res.json({
+      message:
+        accessible.length === 1
+          ? `Removed “${accessible[0].name}” permanently`
+          : `Removed ${accessible.length} items permanently`,
+    });
+  } catch (error) {
     next(error);
   }
 });
@@ -2195,7 +2490,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-Promise.all([ensureAccountsInitialized(), ensureChatDataInitialized(), ensureNoticesInitialized()])
+Promise.all([
+  ensureAccountsInitialized(),
+  ensureChatDataInitialized(),
+  ensureNoticesInitialized(),
+  ensureRecycleBinInitialized(),
+])
   .then(() => {
     app.listen(PORT, () => {
       // eslint-disable-next-line no-console
