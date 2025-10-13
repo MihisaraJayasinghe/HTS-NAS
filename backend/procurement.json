@@ -1,5 +1,5 @@
 {
-  "nextSequence": 2,
+  "nextSequence": 3,
   "requests": [
     {
       "id": "PR-00001",
@@ -164,6 +164,116 @@
       ],
       "createdAt": "2025-09-23T07:04:58.486Z",
       "updatedAt": "2025-09-23T07:16:27.921Z"
+    },
+    {
+      "id": "PR-00002",
+      "sequence": 2,
+      "formType": "equipment",
+      "requester": "Test",
+      "requesterRole": "user",
+      "department": "IT Desk",
+      "title": "laptops",
+      "description": "sdsd",
+      "justification": "sdsdsd",
+      "amount": 9000,
+      "currency": "USD",
+      "neededBy": null,
+      "supplierPreference": "",
+      "attachments": [],
+      "assignee": "",
+      "status": "procurement",
+      "currentStep": "procurement",
+      "departmentReview": {
+        "status": "approved",
+        "reviewer": "DepartmentHead",
+        "reviewedAt": "2025-10-02T11:28:44.913Z",
+        "notes": "",
+        "decision": "approved"
+      },
+      "financeReview": {
+        "status": "approved",
+        "reviewer": "Finance",
+        "reviewedAt": "2025-10-02T11:29:09.369Z",
+        "notes": "",
+        "budgetCode": "4545",
+        "decision": "approved"
+      },
+      "procurementAction": {
+        "status": "pending",
+        "actor": null,
+        "actedAt": null,
+        "supplier": "",
+        "poNumber": "",
+        "poDate": null,
+        "notes": "",
+        "emailLog": ""
+      },
+      "assetReceipt": {
+        "status": "idle",
+        "submittedBy": null,
+        "submittedAt": null,
+        "notes": "",
+        "reference": "",
+        "attachments": []
+      },
+      "departmentReceiptReview": {
+        "status": "idle",
+        "reviewer": null,
+        "reviewedAt": null,
+        "notes": "",
+        "decision": null
+      },
+      "invoiceVerification": {
+        "status": "idle",
+        "reviewer": null,
+        "reviewedAt": null,
+        "notes": "",
+        "invoiceNumber": "",
+        "paymentReference": "",
+        "decision": null
+      },
+      "history": [
+        {
+          "id": "ef8786ab-96cf-4e4e-a0dd-4e2e6e2deeea",
+          "action": "request.created",
+          "actor": "Test",
+          "role": "user",
+          "notes": "sds",
+          "details": {
+            "title": "laptops",
+            "department": "IT Desk",
+            "amount": 9000,
+            "currency": "USD"
+          },
+          "timestamp": "2025-10-02T11:27:35.426Z"
+        },
+        {
+          "id": "ac14e3f0-259f-4240-85e6-8a7e4348b5f8",
+          "action": "department.review",
+          "actor": "DepartmentHead",
+          "role": "dept-head",
+          "notes": "",
+          "details": {
+            "decision": "approved"
+          },
+          "timestamp": "2025-10-02T11:28:44.914Z"
+        },
+        {
+          "id": "ed7bc945-d712-484c-8eb5-569d6dc10c58",
+          "action": "finance.review",
+          "actor": "Finance",
+          "role": "finance",
+          "notes": "",
+          "details": {
+            "decision": "approved",
+            "stage": "budget",
+            "budgetCode": "4545"
+          },
+          "timestamp": "2025-10-02T11:29:09.369Z"
+        }
+      ],
+      "createdAt": "2025-10-02T11:27:35.426Z",
+      "updatedAt": "2025-10-02T11:29:09.369Z"
     }
   ]
 }
