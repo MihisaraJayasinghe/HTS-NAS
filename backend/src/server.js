@@ -88,7 +88,7 @@ app.use((req, res, next) => {
 
 const NAS_ROOT = process.env.NAS_ROOT
   ? path.resolve(process.env.NAS_ROOT)
-  : path.join(__dirname, '..', '..', 'nas_storage');
+  : path.join(__dirname, '..', '..', 'OneDrive - Harbour Tech Solutions Sdn Bhd/nas_storage');
 const LOCKS_FILE = path.join(__dirname, '..', 'locks.json');
 const FRONTEND_DIST = path.join(__dirname, '..', '..', 'frontend', 'dist');
 const CHAT_FILE = path.join(__dirname, '..', 'chat.json');
