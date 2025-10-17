@@ -2154,6 +2154,8 @@ app.get('/api/items/content', requireAuth, async (req, res, next) => {
     const downloadFlag = req.query.download === '1' || req.query.download === 'true';
     const mimeType = getMimeType(fileName);
 
+    const totalSize = stats.size;
+    res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Content-Type', mimeType);
     res.setHeader(
       'Content-Disposition',
@@ -2161,6 +2163,40 @@ app.get('/api/items/content', requireAuth, async (req, res, next) => {
     );
     res.setHeader('X-File-Name', encodeURIComponent(fileName));
 
+    const range = req.headers.range;
+    if (range) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+      if (!match) {
+        res.setHeader('Content-Range', `bytes */${totalSize}`);
+        return res.status(416).end();
+      }
+      let start = match[1] ? parseInt(match[1], 10) : 0;
+      let end = match[2] ? parseInt(match[2], 10) : totalSize - 1;
+      if (Number.isNaN(start) || Number.isNaN(end)) {
+        res.setHeader('Content-Range', `bytes */${totalSize}`);
+        return res.status(416).end();
+      }
+      if (start >= totalSize) {
+        res.setHeader('Content-Range', `bytes */${totalSize}`);
+        return res.status(416).end();
+      }
+      if (end >= totalSize) {
+        end = totalSize - 1;
+      }
+      if (end < start) {
+        [start, end] = [end, start];
+      }
+      const chunkSize = end - start + 1;
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${totalSize}`);
+      res.setHeader('Content-Length', `${chunkSize}`);
+      const stream = fsSync.createReadStream(absolute, { start, end });
+      stream.on('error', next);
+      stream.pipe(res);
+      return undefined;
+    }
+
+    res.setHeader('Content-Length', `${totalSize}`);
     const stream = fsSync.createReadStream(absolute);
     stream.on('error', next);
     stream.pipe(res);
@@ -2197,12 +2233,21 @@ app.use((err, req, res, next) => {
 
 Promise.all([ensureAccountsInitialized(), ensureChatDataInitialized(), ensureNoticesInitialized()])
   .then(() => {
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       // eslint-disable-next-line no-console
       console.log(`NAS server listening on port ${PORT}`);
       // eslint-disable-next-line no-console
       console.log(`Serving files from ${NAS_ROOT}`);
     });
+    try {
+      // Prevent long transfers from being cut off
+      server.headersTimeout = 0; // no header timeout
+      server.requestTimeout = 0; // no overall request timeout
+      server.keepAliveTimeout = 75 * 1000; // 75s keep-alive
+      server.maxRequestsPerSocket = 0; // unlimited
+    } catch (e) {
+      // noop
+    }
   })
   .catch((error) => {
     console.error('Failed to initialize data stores', error);
